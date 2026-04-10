@@ -42,6 +42,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# ── Classification results & saved models ────────────────────────────────────
+results/
+
 # ── Logs / misc outputs ───────────────────────────────────────────────────────
 *.log
 *.png
