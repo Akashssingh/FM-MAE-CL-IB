@@ -11,7 +11,7 @@ Currently focused on the **CNV (copy number variation) unimodal** pipeline using
 1. Takes raw GISTIC2-thresholded CNV data from the [TCGA-BRCA dataset on Xena Browser](https://xenabrowser.net/datapages/)
 2. Preprocesses it following the paper's methodology (missing value handling, zero-variance removal, top-500 feature selection by variance)
 3. Trains a Variational Autoencoder with log-cosh reconstruction loss to extract 32-dimensional latent features per patient
-4. Saves the latent features as a CSV ready for downstream classification
+4. Trains SVM and Random Forest classifiers on the extracted features using 10-fold stratified cross-validation with minority class upsampling, faithfully replicating the paper's training protocol
 
 ---
 
@@ -80,11 +80,50 @@ Optional flags:
 --test_mode     100 patients, 5 epochs — quick CPU functionality check
 ```
 
+### Step 3 — Train classifiers
+
+> **Requires real survival labels.** Step 1 must have been run with `--clinical_path` pointing to the Xena clinical TSV so that the label column contains actual 0/1 values.
+
+```bash
+python train_classifier.py
+```
+
+This trains five classifiers (RBF SVM, Linear SVM, Polynomial SVM, Sigmoid SVM, Random Forest) using 10-fold stratified cross-validation, with minority class upsampling applied per fold. Results are written to `results/classification_results.csv`.
+
+Optional flags:
+
+```
+--modality_paths   Path(s) to VAE feature CSV(s) (default: data/processed/vae_features_cnv.csv)
+--modality_names   Short name(s) for each modality (default: cnv)
+--results_file     Output CSV for results (default: results/classification_results.csv)
+--test_mode        3-fold CV and small RF — quick CPU smoke-test
+```
+
+The script is already structured to accept multiple modality files for future multimodal experiments:
+
+```bash
+# Future multimodal example
+python train_classifier.py \
+  --modality_paths data/processed/vae_features_cnv.csv \
+                   data/processed/vae_features_cln.csv \
+  --modality_names cnv cln
+```
+
 ### Quick smoke-test (CPU, ~20 seconds)
+
+Steps 1 and 2 can be validated without real labels:
 
 ```bash
 python prepare_cnv_data.py --test_mode
 python cnv_vae_extractor.py --test_mode
+```
+
+To smoke-test the full three-step pipeline end-to-end, pass the clinical file in step 1:
+
+```bash
+python prepare_cnv_data.py --test_mode --clinical_path data/<clinical_file>.tsv
+python cnv_vae_extractor.py --test_mode
+python train_classifier.py --test_mode
 ```
 
 ---
@@ -116,7 +155,10 @@ docker compose run --rm vae-pipeline python prepare_cnv_data.py
 # VAE extraction only
 docker compose run --rm vae-pipeline python cnv_vae_extractor.py
 
-# Smoke-test
+# Classification only
+docker compose run --rm vae-pipeline python train_classifier.py
+
+# Smoke-test (steps 1 + 2 only, no clinical file needed)
 docker compose run --rm vae-pipeline \
   sh -c "python prepare_cnv_data.py --test_mode && python cnv_vae_extractor.py --test_mode"
 ```
@@ -125,18 +167,27 @@ docker compose run --rm vae-pipeline \
 
 ## Output
 
-After running both steps, `data/processed/` will contain:
+After running all three steps, outputs are written to two directories:
+
+**`data/processed/`**
 
 | File | Description |
 |---|---|
 | `raw_features_cnv.csv` | Preprocessed CNV features (patients × 500 genes + label) |
 | `vae_features_cnv.csv` | 32-dimensional VAE latent features per patient |
-| `vae_features_cnv_model.pt` | Saved PyTorch model checkpoint |
+| `vae_features_cnv_model.pt` | Saved PyTorch VAE model checkpoint |
 
 The `vae_features_cnv.csv` format matches the reference paper exactly:
 ```
 submitter_id.samples, cnv_vae_1, ..., cnv_vae_32, label_cnv
 ```
+
+**`results/`**
+
+| File | Description |
+|---|---|
+| `classification_results.csv` | Per-classifier CV and full-dataset metrics (Acc, Precision, Sensitivity, F1, ROC-AUC) |
+| `best_model.pkl` | Best-performing sklearn model saved across CV folds |
 
 ---
 
@@ -145,13 +196,15 @@ submitter_id.samples, cnv_vae_1, ..., cnv_vae_32, label_cnv
 ```
 ├── prepare_cnv_data.py       # Step 1: data preprocessing
 ├── cnv_vae_extractor.py      # Step 2: log-cosh VAE training + feature extraction
+├── train_classifier.py       # Step 3: SVM/RF classification with 10-fold CV
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
 ├── data/
 │   ├── TCGA.BRCA.sampleMap_...tsv   # raw input (download from Xena)
-│   └── processed/                   # outputs written here
-└── reference_files/                 # original Keras code from the paper
+│   └── processed/                   # VAE features and model checkpoint
+├── results/                         # classification results and best model
+└── reference_files/                 # original Keras code from the paper (reference only)
 ```
 
 ---
