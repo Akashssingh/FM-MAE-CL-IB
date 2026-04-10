@@ -1,0 +1,38 @@
+# docker-compose.yml — CNV Log-Cosh VAE Feature Extractor
+#
+# Usage:
+#   Full pipeline (prepare data → extract VAE features):
+#     docker compose up
+#
+#   Smoke-test on CPU (100 patients, 5 epochs — finishes in < 2 min):
+#     docker compose run --rm vae-pipeline \
+#       sh -c "python prepare_cnv_data.py --test_mode && \
+#              python cnv_vae_extractor.py --test_mode"
+#
+#   Data prep only:
+#     docker compose run --rm vae-pipeline python prepare_cnv_data.py
+#
+#   VAE extraction only (requires raw_features_cnv.csv to already exist):
+#     docker compose run --rm vae-pipeline python cnv_vae_extractor.py
+
+services:
+  vae-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cnv-vae:latest
+    container_name: cnv_vae_pipeline
+    volumes:
+      # Mount local data/ directory so scripts can read raw data
+      # and write processed outputs back to your host machine.
+      - ./data:/app/data
+    # Default: run the full two-step pipeline
+    command: >
+      sh -c "python prepare_cnv_data.py &&
+             python cnv_vae_extractor.py"
+    # Resource limits for CPU-only runs (adjust as needed)
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
