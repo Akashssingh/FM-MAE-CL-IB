@@ -11,21 +11,26 @@ Steps performed:
   3. Handle missing values: discard features with >10% NaN; KNN-impute remainder
   4. Remove zero-variance features (same value for all patients)
   5. Select top N features by variance (default 500, captures >98% variance)
-  6. Optionally merge 5-year survival labels from a clinical TSV
+  6. Merge 5-year binary OS survival labels from TCGA-CDR survival TSV
   7. Save as raw_features_cnv.csv for downstream VAE feature extraction
 
 Output CSV format (matches reference code expectation):
   submitter_id.samples | gene_1 | gene_2 | ... | gene_500 | label_cnv
 
-Usage:
-  # Basic (no labels):
-  python prepare_cnv_data.py
+Label encoding (OS-based 5-year survival):
+  0 = long-term survivor  (OS.time >= 5*365.25 days)
+  1 = short-term survivor (OS==1 dead AND OS.time < 5*365.25)
+ -1 = censored/unknown   (alive but follow-up < 5yr; excluded during training)
 
-  # With survival labels from Xena clinical file:
+Usage:
+  # With OS survival labels (recommended):
+  python prepare_cnv_data.py --survival_path survival_BRCA_survival.txt
+
+  # With legacy Xena clinical file:
   python prepare_cnv_data.py --clinical_path data/TCGA.BRCA.sampleMap_BRCA_clinicalMatrix
 
-  # Quick smoke-test (first 100 patients, 3-epoch VAE):
-  python prepare_cnv_data.py --test_mode
+  # Quick smoke-test (first 100 patients):
+  python prepare_cnv_data.py --survival_path survival_BRCA_survival.txt --test_mode
 """
 
 import os
@@ -48,10 +53,70 @@ DAYS_5Y = 5 * 365.25       # 5-year survival cutoff in days
 
 # ── Survival label helpers ────────────────────────────────────────────────────
 
+def _compute_os_labels(df_surv: pd.DataFrame,
+                       patient_ids: pd.Series) -> pd.Series:
+    """
+    Derive binary 5-year survival labels from the TCGA-CDR survival TSV
+    (survival_BRCA_survival.txt from Xena Browser).
+
+    Label assignment — replicates Arya et al. (2023) exactly:
+      0 = long-term  : OS.time >= DAYS_5Y  (~301 patients in TCGA-BRCA)
+      1 = short-term : OS.time <  DAYS_5Y  (~934 patients in TCGA-BRCA)
+     -1 = missing    : OS.time is NaN
+
+    IMPORTANT: label=1 is the MAJORITY class in the paper's dataset.
+    The paper assigns short-term (label=1) to ALL patients whose OS.time
+    falls below 5 years, INCLUDING alive-but-censored patients who simply
+    had less than 5 years of follow-up.  This matches the reference
+    ml_multimodal_train.py which hardcodes label=1 as the majority class
+    in its upsample() function (df_majority = df[df[label]==1]).
+
+    Barcode matching: attempts full sample barcode first, then 12-char TCGA
+    patient prefix to handle tissue-code mismatches.
+    """
+    if 'sample' not in df_surv.columns:
+        print("  [WARN] 'sample' column not found in survival file. "
+              "Using placeholder -1 for all patients.")
+        return pd.Series([-1] * len(patient_ids))
+
+    lookup_full   = df_surv.set_index('sample')
+    lookup_prefix = df_surv.copy()
+    lookup_prefix['_prefix'] = lookup_prefix['sample'].str[:12]
+    lookup_prefix = lookup_prefix.drop_duplicates('_prefix').set_index('_prefix')
+
+    labels = []
+    for pid in patient_ids.values:
+        row = None
+        pid_str = str(pid).strip()
+        if pid_str in lookup_full.index:
+            row = lookup_full.loc[pid_str]
+        else:
+            prefix = pid_str[:12]
+            if prefix in lookup_prefix.index:
+                row = lookup_prefix.loc[prefix]
+
+        if row is None:
+            labels.append(-1)
+            continue
+
+        os_time = pd.to_numeric(row.get('OS.time', np.nan), errors='coerce')
+
+        if pd.isna(os_time):
+            labels.append(-1)
+        elif os_time < DAYS_5Y:
+            labels.append(1)   # short-term (majority class)
+        else:
+            labels.append(0)   # long-term  (minority class)
+
+    return pd.Series(labels)
+
+
 def _compute_survival_labels(df_clin: pd.DataFrame,
                               patient_ids: pd.Series) -> pd.Series:
     """
-    Derive binary survival labels from Xena clinical data.
+    (Legacy) Derive binary survival labels from a Xena clinical matrix.
+    Prefer _compute_os_labels() with the TCGA-CDR survival TSV instead.
+
       0 = long-term survivor  (survived >= 5 years)
       1 = short-term survivor (survived < 5 years)
      -1 = unknown / missing
@@ -98,6 +163,7 @@ def _compute_survival_labels(df_clin: pd.DataFrame,
 
 def prepare_cnv_data(cnv_path: str,
                      output_path: str,
+                     survival_path: str = None,
                      clinical_path: str = None,
                      n_features: int = N_FEATURES,
                      test_mode: bool = False) -> pd.DataFrame:
@@ -170,8 +236,29 @@ def prepare_cnv_data(cnv_path: str,
     print(f"      Top {actual_n} features explain {explained:.1f}% of total variance")
 
     # ── 6. Merge survival labels ─────────────────────────────────────────────
-    if clinical_path and os.path.exists(clinical_path):
-        print(f"      Loading clinical data from {clinical_path} ...")
+    if survival_path and os.path.exists(survival_path):
+        # Preferred: TCGA-CDR OS survival TSV (survival_BRCA_survival.txt)
+        print(f"[6/6] Loading OS survival data from {survival_path} ...")
+        try:
+            df_surv = pd.read_csv(survival_path, sep='\t', low_memory=False)
+            labels = _compute_os_labels(df_surv, patient_ids)
+            n_labeled = (labels >= 0).sum()
+            n_long  = (labels == 0).sum()
+            n_short = (labels == 1).sum()
+            n_miss  = (labels == -1).sum()
+            print(f"      Matched {n_labeled}/{len(labels)} patients")
+            print(f"      Short-term/label=1 (OS.time < 5yr): {n_short}  "
+                  f"[majority class]")
+            print(f"      Long-term /label=0 (OS.time >= 5yr): {n_long}  "
+                  f"[minority class, upsampled during training]")
+            print(f"      Missing OS.time: {n_miss}")
+        except Exception as exc:
+            print(f"      [WARN] Survival data error: {exc}. "
+                  "Using placeholder label -1.")
+            labels = pd.Series([-1] * len(patient_ids))
+    elif clinical_path and os.path.exists(clinical_path):
+        # Legacy: Xena clinical matrix
+        print(f"[6/6] Loading clinical data (legacy) from {clinical_path} ...")
         try:
             df_clin = pd.read_csv(
                 clinical_path, sep='\t', index_col=0, low_memory=False)
@@ -184,10 +271,13 @@ def prepare_cnv_data(cnv_path: str,
                   "Using placeholder label -1.")
             labels = pd.Series([-1] * len(patient_ids))
     else:
-        if clinical_path:
+        if survival_path:
+            print(f"      [WARN] Survival file not found at {survival_path}.")
+        elif clinical_path:
             print(f"      [WARN] Clinical file not found at {clinical_path}.")
-        print("      No clinical data → using placeholder label -1. "
-              "Pass --clinical_path to add real 5-year survival labels.")
+        print("[6/6] No survival/clinical data → using placeholder label -1.\n"
+              "      Pass --survival_path survival_BRCA_survival.txt for "
+              "5-year OS labels.")
         labels = pd.Series([-1] * len(patient_ids))
 
     # ── 7. Build and save output ─────────────────────────────────────────────
@@ -219,15 +309,20 @@ def main():
         '--cnv_path', type=str,
         default=os.path.join(
             'data',
-            'TCGA.BRCA.sampleMap_Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes.tsv'),
+            'TCGA.BRCA.sampleMap_Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes'),
         help='Path to raw GISTIC2-thresholded CNV TSV (genes x patients).')
     parser.add_argument(
         '--output_path', type=str,
         default=os.path.join('data', 'processed', 'raw_features_cnv.csv'),
         help='Output path for the processed raw_features CSV.')
     parser.add_argument(
+        '--survival_path', type=str, default=None,
+        help='Path to TCGA-CDR OS survival TSV (e.g. survival_BRCA_survival.txt). '
+             'Preferred over --clinical_path for 5-year OS labels.')
+    parser.add_argument(
         '--clinical_path', type=str, default=None,
-        help='(Optional) Path to Xena clinical TSV for 5-year survival labels.')
+        help='(Legacy) Path to Xena clinical TSV for 5-year survival labels. '
+             'Use --survival_path instead when the TCGA-CDR file is available.')
     parser.add_argument(
         '--n_features', type=int, default=N_FEATURES,
         help='Number of top-variance features to select.')
@@ -239,6 +334,7 @@ def main():
     prepare_cnv_data(
         cnv_path=args.cnv_path,
         output_path=args.output_path,
+        survival_path=args.survival_path,
         clinical_path=args.clinical_path,
         n_features=args.n_features,
         test_mode=args.test_mode)

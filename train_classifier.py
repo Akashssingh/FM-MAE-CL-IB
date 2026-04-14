@@ -38,9 +38,11 @@ Usage:
 
 import os
 import csv
+import json
 import pickle
 import argparse
 import warnings
+import datetime
 import numpy as np
 import pandas as pd
 from sklearn.svm import SVC
@@ -58,9 +60,9 @@ warnings.filterwarnings('ignore')   # suppress convergence/UndefinedMetric warni
 N_FOLDS       = 10
 RANDOM_STATE  = 123
 RESULTS_FILE  = 'results/classification_results.csv'
-BEST_MODEL_PATH = 'results/best_model.pkl'
+BEST_MODEL_DIR = 'results/models'
 
-# CSV header for results file
+# CSV headers
 RESULTS_HEADER = [
     'modality', 'classifier',
     'cv_roc_auc',
@@ -68,6 +70,12 @@ RESULTS_HEADER = [
     'full_roc_auc',
     'full_tn', 'full_fp', 'full_fn', 'full_tp',
     'cv_accuracy', 'cv_precision', 'cv_sensitivity', 'cv_f1'
+]
+
+FOLD_METRICS_HEADER = [
+    'run_id', 'modality', 'classifier', 'fold',
+    'roc_auc', 'tn', 'fp', 'fn', 'tp',
+    'accuracy', 'precision', 'sensitivity', 'f1'
 ]
 
 
@@ -147,27 +155,50 @@ def upsample_minority(df: pd.DataFrame) -> pd.DataFrame:
 
 # ── Core CV training loop ─────────────────────────────────────────────────────
 
-def run_cv(model, df: pd.DataFrame, n_folds: int = N_FOLDS) -> dict:
+def run_cv(model, df: pd.DataFrame, n_folds: int = N_FOLDS,
+          run_id: str = '', modality_tag: str = '',
+          clf_name: str = '') -> dict:
     """
     10-fold stratified CV with per-fold upsampling.
     Tracks the best model (by ROC-AUC) across folds.
     Returns a dict with CV-averaged metrics and full-dataset metrics.
 
+    Persistence outputs (written to BEST_MODEL_DIR):
+      - {clf_name}_best_model.pkl          : best model overall (by ROC-AUC)
+      - {clf_name}_fold_{n}_model.pkl      : best model at the end of fold n
+      - {clf_name}_oof_predictions.csv     : out-of-fold predictions for every patient
+      - per_fold_metrics.csv               : appended with one row per fold
+
     Faithfully replicates the reference model_run() logic including best-model
     tracking and reload before each subsequent fold.
     """
-    os.makedirs(os.path.dirname(os.path.abspath(BEST_MODEL_PATH)), exist_ok=True)
+    os.makedirs(BEST_MODEL_DIR, exist_ok=True)
+    best_model_path = os.path.join(BEST_MODEL_DIR, f'{clf_name}_best_model.pkl')
+    fold_metrics_path = os.path.join(os.path.dirname(RESULTS_FILE),
+                                      'per_fold_metrics.csv')
+    oof_pred_path = os.path.join(BEST_MODEL_DIR,
+                                  f'{clf_name}_oof_predictions.csv')
+
+    # Init per-fold metrics file
+    _init_csv(fold_metrics_path, FOLD_METRICS_HEADER)
 
     # Separate features from id/label
     feature_df = df.drop(columns=[df.columns[0], df.columns[-1]])
     X = feature_df.values.astype(np.float32)
     y = df[df.columns[-1]].values.astype(int)
+    patient_ids = df[df.columns[0]].values
 
     skf = StratifiedKFold(n_splits=n_folds, shuffle=False)
 
     cum_cm   = np.zeros(4)       # tn fp fn tp  (cumulative across folds)
     cum_roc  = 0.0
     best_roc = 0.0
+
+    # Out-of-fold prediction buffer
+    oof_ids   = []
+    oof_true  = []
+    oof_pred  = []
+    oof_folds = []
 
     for fold_idx, (train_idx, test_idx) in enumerate(skf.split(X, y), start=1):
         X_train, X_test = X[train_idx], X[test_idx]
@@ -189,17 +220,54 @@ def run_cv(model, df: pd.DataFrame, n_folds: int = N_FOLDS) -> dict:
         cum_cm  += cm
         cum_roc += roc
 
+        # Accumulate OOF predictions
+        oof_ids.extend(patient_ids[test_idx])
+        oof_true.extend(y_test)
+        oof_pred.extend(y_pred)
+        oof_folds.extend([fold_idx] * len(test_idx))
+
+        eps = 1e-9
+        tn, fp, fn, tp = cm
+        fold_acc  = (tp + tn) / (tp + tn + fp + fn + eps)
+        fold_prec = tp / (tp + fp + eps)
+        fold_sens = tp / (tp + fn + eps)
+        fold_f1   = 2 * fold_prec * fold_sens / (fold_prec + fold_sens + eps)
+
         print(f"    Fold {fold_idx:2d}/{n_folds} | "
               f"ROC-AUC={roc:.4f} | "
-              f"TN={cm[0]:.0f} FP={cm[1]:.0f} FN={cm[2]:.0f} TP={cm[3]:.0f}")
+              f"TN={tn:.0f} FP={fp:.0f} FN={fn:.0f} TP={tp:.0f}")
+
+        # Append per-fold metrics row
+        with open(fold_metrics_path, 'a', newline='') as f:
+            csv.writer(f).writerow([
+                run_id, modality_tag, clf_name, fold_idx,
+                round(roc, 4), tn, fp, fn, tp,
+                round(fold_acc, 4), round(fold_prec, 4),
+                round(fold_sens, 4), round(fold_f1, 4),
+            ])
+
+        # Save this fold's model snapshot
+        fold_model_path = os.path.join(
+            BEST_MODEL_DIR, f'{clf_name}_fold_{fold_idx:02d}_model.pkl')
+        pickle.dump(model, open(fold_model_path, 'wb'))
 
         # Track best model
         if roc > best_roc:
             best_roc = roc
-            pickle.dump(model, open(BEST_MODEL_PATH, 'wb'))
+            pickle.dump(model, open(best_model_path, 'wb'))
 
         # Reload best-so-far model for next fold (matches reference behaviour)
-        model = pickle.load(open(BEST_MODEL_PATH, 'rb'))
+        model = pickle.load(open(best_model_path, 'rb'))
+
+    # Save OOF predictions
+    oof_df = pd.DataFrame({
+        'patient_id':    oof_ids,
+        'fold':          oof_folds,
+        'true_label':    oof_true,
+        'predicted_label': oof_pred,
+    })
+    oof_df.to_csv(oof_pred_path, index=False)
+    print(f"    OOF predictions → {oof_pred_path}")
 
     # CV averages
     avg_cm  = np.round(cum_cm / n_folds, 4)
@@ -214,7 +282,7 @@ def run_cv(model, df: pd.DataFrame, n_folds: int = N_FOLDS) -> dict:
                       (cv_precision + cv_sensitivity + eps))
 
     # Full-dataset evaluation with best model
-    best_model = pickle.load(open(BEST_MODEL_PATH, 'rb'))
+    best_model = pickle.load(open(best_model_path, 'rb'))
     y_full_pred = best_model.predict(X)
     full_cm     = confusion_matrix(y, y_full_pred).ravel()
     full_roc    = roc_auc_score(y, y_full_pred)
@@ -267,11 +335,15 @@ def get_classifiers(n_features: int, n_estimators: int = 10) -> list:
 
 # ── Results I/O ───────────────────────────────────────────────────────────────
 
-def init_results_file(path: str):
+def _init_csv(path: str, header: list):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     if not os.path.exists(path):
         with open(path, 'w', newline='') as f:
-            csv.writer(f).writerow(RESULTS_HEADER)
+            csv.writer(f).writerow(header)
+
+
+def init_results_file(path: str):
+    _init_csv(path, RESULTS_HEADER)
 
 
 def append_result(path: str, modality_name: str,
@@ -305,7 +377,11 @@ def print_summary(modality_name: str, clf_name: str, metrics: dict):
 
 def main(args):
     os.makedirs('results', exist_ok=True)
+    os.makedirs(BEST_MODEL_DIR, exist_ok=True)
     init_results_file(RESULTS_FILE)
+
+    # Unique run identifier (timestamp-based for replay-ability)
+    run_id = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # ── Load and merge modalities ─────────────────────────────────────────────
     print(f"\nLoading {len(args.modality_paths)} modality file(s) ...")
@@ -323,7 +399,7 @@ def main(args):
     if set(label_vals) == {-1}:
         print("\n[WARNING] All labels are -1 (placeholder). "
               "Classification requires real 0/1 survival labels.\n"
-              "Re-run prepare_cnv_data.py with --clinical_path to generate them.")
+              "Re-run prepare_cnv_data.py with --survival_path to generate them.")
         return
 
     # Drop rows with unknown labels
@@ -338,9 +414,61 @@ def main(args):
     print(f"  Long-term survivors  (label=0) : {n_long}")
     print(f"  Class imbalance ratio : {max(n_short,n_long)/min(n_short,n_long):.2f}")
 
+    # ── Persistence: save the exact dataset used for this run ─────────────────
+    dataset_path = os.path.join('results', f'dataset_used_{run_id}.csv')
+    df_merged.to_csv(dataset_path, index=False)
+    print(f"  Dataset snapshot → {dataset_path}")
+
+    # ── Persistence: save the CV split indices ────────────────────────────────
+    n_folds = 3 if args.test_mode else N_FOLDS
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=False)
+    X_for_split = df_merged.iloc[:, 1:-1].values
+    y_for_split = df_merged['label'].values
+    patient_ids_arr = df_merged[df_merged.columns[0]].values
+
+    splits = []
+    for fold_idx, (train_idx, test_idx) in enumerate(
+            skf.split(X_for_split, y_for_split), start=1):
+        splits.append({
+            'fold': fold_idx,
+            'train_indices': train_idx.tolist(),
+            'test_indices':  test_idx.tolist(),
+            'train_patient_ids': patient_ids_arr[train_idx].tolist(),
+            'test_patient_ids':  patient_ids_arr[test_idx].tolist(),
+        })
+
+    splits_path = os.path.join('results', f'cv_splits_{run_id}.pkl')
+    with open(splits_path, 'wb') as f:
+        pickle.dump({'run_id': run_id, 'n_folds': n_folds,
+                     'random_state': RANDOM_STATE, 'splits': splits}, f)
+    print(f"  CV splits ({n_folds} folds) → {splits_path}")
+
+    # ── Persistence: save run manifest ────────────────────────────────────────
+    manifest = {
+        'run_id':          run_id,
+        'timestamp':       datetime.datetime.now().isoformat(),
+        'modality_paths':  args.modality_paths,
+        'modality_names':  args.modality_names,
+        'modality_tag':    modality_tag,
+        'n_patients':      int(n_total),
+        'n_features':      int(n_feat),
+        'n_short_term':    int(n_short),
+        'n_long_term':     int(n_long),
+        'n_folds':         n_folds,
+        'random_state':    RANDOM_STATE,
+        'test_mode':       args.test_mode,
+        'results_file':    RESULTS_FILE,
+        'dataset_snapshot': dataset_path,
+        'splits_file':     splits_path,
+        'models_dir':      BEST_MODEL_DIR,
+    }
+    manifest_path = os.path.join('results', f'run_manifest_{run_id}.json')
+    with open(manifest_path, 'w') as f:
+        json.dump(manifest, f, indent=2)
+    print(f"  Run manifest → {manifest_path}")
+
     # ── Run classifiers ───────────────────────────────────────────────────────
     n_est = 5 if args.test_mode else 10
-    n_folds = 3 if args.test_mode else N_FOLDS
     classifiers = get_classifiers(n_features=n_feat, n_estimators=n_est)
 
     print(f"\nRunning {len(classifiers)} classifiers with "
@@ -350,13 +478,19 @@ def main(args):
         print(f"\n{'='*60}")
         print(f"  Classifier : {clf_name}")
         print(f"{'='*60}")
-        metrics = run_cv(clf, df_merged, n_folds=n_folds)
+        metrics = run_cv(clf, df_merged, n_folds=n_folds,
+                         run_id=run_id, modality_tag=modality_tag,
+                         clf_name=clf_name)
         print_summary(modality_tag, clf_name, metrics)
         append_result(RESULTS_FILE, modality_tag, clf_name, metrics)
 
     print(f"\n{'='*60}")
-    print(f"All results saved to: {RESULTS_FILE}")
-    print(f"Best model saved to : {BEST_MODEL_PATH}")
+    print(f"All results saved to   : {RESULTS_FILE}")
+    print(f"Per-fold metrics       : results/per_fold_metrics.csv")
+    print(f"Best models            : {BEST_MODEL_DIR}/")
+    print(f"OOF predictions        : {BEST_MODEL_DIR}/<clf>_oof_predictions.csv")
+    print(f"CV splits              : {splits_path}")
+    print(f"Run manifest           : {manifest_path}")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

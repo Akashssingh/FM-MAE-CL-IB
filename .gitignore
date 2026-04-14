@@ -3,7 +3,7 @@ data/TCGA.BRCA.sampleMap_*
 data/gdac.broadinstitute.org_*/
 
 # ── Generated / processed feature files ──────────────────────────────────────
-data/processed/
+# data/processed/ is tracked — kept for reproducibility
 
 # ── Model checkpoints ─────────────────────────────────────────────────────────
 *.pt
@@ -43,7 +43,7 @@ Thumbs.db
 *.swo
 
 # ── Classification results & saved models ────────────────────────────────────
-results/
+# results/ is tracked — kept for reproducibility
 
 # ── Logs / misc outputs ───────────────────────────────────────────────────────
 *.log

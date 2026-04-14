@@ -1,19 +1,23 @@
 # docker-compose.yml — CNV Log-Cosh VAE Feature Extractor
 #
 # Usage:
-#   Full pipeline (prepare data → extract VAE features):
+#   Full pipeline (all 3 steps — prepare data, extract VAE features, classify):
 #     docker compose up
 #
-#   Smoke-test on CPU (100 patients, 5 epochs — finishes in < 2 min):
+#   Smoke-test on CPU (steps 1 + 2 only, no survival file needed, finishes in < 2 min):
 #     docker compose run --rm vae-pipeline \
 #       sh -c "python prepare_cnv_data.py --test_mode && \
 #              python cnv_vae_extractor.py --test_mode"
 #
 #   Data prep only:
-#     docker compose run --rm vae-pipeline python prepare_cnv_data.py
+#     docker compose run --rm vae-pipeline \
+#       python prepare_cnv_data.py --survival_path survival_BRCA_survival.txt
 #
 #   VAE extraction only (requires raw_features_cnv.csv to already exist):
 #     docker compose run --rm vae-pipeline python cnv_vae_extractor.py
+#
+#   Classification only (requires vae_features_cnv.csv to already exist):
+#     docker compose run --rm vae-pipeline python train_classifier.py
 
 services:
   vae-pipeline:
@@ -26,10 +30,15 @@ services:
       # Mount local data/ directory so scripts can read raw data
       # and write processed outputs back to your host machine.
       - ./data:/app/data
-    # Default: run the full two-step pipeline
+      # Mount survival file from project root into the container.
+      - ./survival_BRCA_survival.txt:/app/survival_BRCA_survival.txt:ro
+      # Mount results/ so classification outputs are persisted on the host.
+      - ./results:/app/results
+    # Default: run the full three-step pipeline
     command: >
-      sh -c "python prepare_cnv_data.py &&
-             python cnv_vae_extractor.py"
+      sh -c "python prepare_cnv_data.py --survival_path survival_BRCA_survival.txt &&
+             python cnv_vae_extractor.py &&
+             python train_classifier.py"
     # Resource limits for CPU-only runs (adjust as needed)
     deploy:
       resources:

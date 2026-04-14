@@ -4,25 +4,27 @@
 # Replicates the CNV unimodal preprocessing + VAE training pipeline from
 # Arya et al. (2023), re-implemented in PyTorch (CPU-only).
 #
+# Before running, place the TCGA-CDR survival file in the project root:
+#   survival_BRCA_survival.txt
+#
 # Build:
 #   docker build -t cnv-vae .
 #
-# Run pipeline with your local data directory mounted:
-#   docker run --rm \
-#     -v "$(pwd)/data:/app/data" \
-#     cnv-vae
+# Run full pipeline (all 3 steps):
+#   docker compose up
 #
 # Or run individual steps:
-#   docker run --rm -v "$(pwd)/data:/app/data" cnv-vae \
-#     python prepare_cnv_data.py
+#   docker compose run --rm vae-pipeline \
+#     python prepare_cnv_data.py --survival_path survival_BRCA_survival.txt
 #
-#   docker run --rm -v "$(pwd)/data:/app/data" cnv-vae \
-#     python cnv_vae_extractor.py
+#   docker compose run --rm vae-pipeline python cnv_vae_extractor.py
 #
-# Quick CPU smoke-test (100 patients, 5 epochs):
-#   docker run --rm -v "$(pwd)/data:/app/data" cnv-vae \
-#     python prepare_cnv_data.py --test_mode && \
-#     python cnv_vae_extractor.py --test_mode
+#   docker compose run --rm vae-pipeline python train_classifier.py
+#
+# Quick CPU smoke-test (100 patients, 5 epochs, no survival file needed):
+#   docker compose run --rm vae-pipeline \
+#     sh -c "python prepare_cnv_data.py --test_mode && \
+#            python cnv_vae_extractor.py --test_mode"
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM python:3.10-slim
@@ -52,12 +54,16 @@ RUN grep -v '^torch' requirements.txt | \
 # ── Application code ──────────────────────────────────────────────────────────
 COPY prepare_cnv_data.py .
 COPY cnv_vae_extractor.py .
+COPY train_classifier.py .
 
-# ── Data directories ──────────────────────────────────────────────────────────
-# The raw data file is expected at /app/data/ (mounted at runtime).
-# Processed outputs will be written to /app/data/processed/.
-RUN mkdir -p data/processed
+# ── Data and output directories ───────────────────────────────────────────────
+# Raw data is expected at /app/data/ (mounted at runtime).
+# Processed outputs go to /app/data/processed/.
+# Classification results go to /app/results/ (mounted at runtime).
+RUN mkdir -p data/processed results/models
 
 # ── Default command: run full pipeline ───────────────────────────────────────
 CMD ["sh", "-c", \
-     "python prepare_cnv_data.py && python cnv_vae_extractor.py"]
+     "python prepare_cnv_data.py --survival_path survival_BRCA_survival.txt && \
+      python cnv_vae_extractor.py && \
+      python train_classifier.py"]

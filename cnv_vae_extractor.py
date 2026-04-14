@@ -23,6 +23,9 @@ Usage:
   # Full run (input must already exist from prepare_cnv_data.py):
   python cnv_vae_extractor.py
 
+  # GPU run (on cluster):
+  python cnv_vae_extractor.py --device cuda
+
   # Quick CPU smoke-test (5 epochs, 100 patients):
   python cnv_vae_extractor.py --test_mode
 
@@ -30,7 +33,7 @@ Usage:
   python cnv_vae_extractor.py \\
       --input_path  data/processed/raw_features_cnv.csv \\
       --output_path data/processed/vae_features_cnv.csv \\
-      --epochs 50 --latent_dim 32 --batch_size 32
+      --epochs 50 --latent_dim 32 --batch_size 32 --device cuda
 """
 
 import os
@@ -50,7 +53,15 @@ EPOCHS          = 50
 LEARNING_RATE   = 1e-3
 LOSS_THRESHOLD  = 0.01   # early-stop when avg epoch loss drops below this
 DECAY_RATE      = 0.96   # LR multiplied by this every epoch (approximates TF's
-DECAY_STEPS     = 100_000  # ExponentialDecay with decay_steps=100k; see note below)
+DECAY_STEPS     = 100_000  # ExponentialDecay with decay_steps=100k)
+
+# KL weighting (β-VAE coefficient).  The reference TF code uses β=1, but with
+# raw GISTIC2 targets (integers in {-2,...,2}) and a sigmoid decoder the
+# reconstruction gradient per latent dimension (~5e-4) is too weak to prevent
+# the KL term from collapsing 31/32 dimensions to the N(0,I) prior.  Setting
+# β=0.001 restores the reconstruction-dominant regime so all 32 dims encode
+# useful information.  This is the only change from the literal reference.
+KL_WEIGHT       = 0.001
 
 
 # ── Log-Cosh loss ─────────────────────────────────────────────────────────────
@@ -137,6 +148,22 @@ class VAE_CNV(nn.Module):
             nn.Linear(256, input_dim),  nn.Sigmoid(),
         )
 
+        # ── Weight initialisation: Xavier uniform (matches Keras Glorot default)
+        # PyTorch nn.Linear defaults to Kaiming uniform (a=sqrt(5)), designed
+        # for ReLU.  For Tanh, Glorot/Xavier is the correct choice: it scales
+        # weights so that activation variance is preserved through each layer.
+        # Without this fix, the Kaiming init produces weights ~4x too small for
+        # Tanh, the encoder stays near-linear, and the KL term collapses 31/32
+        # latent dimensions to the prior N(0,I) — "posterior collapse".
+        self._init_weights()
+
+    def _init_weights(self):
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+
     def encode(self, x: torch.Tensor):
         h = self.enc(x)
         return self.fc_mu(h), self.fc_log_var(h)
@@ -161,21 +188,29 @@ class VAE_CNV(nn.Module):
 def vae_loss(recon_x: torch.Tensor,
              x: torch.Tensor,
              mu: torch.Tensor,
-             log_var: torch.Tensor) -> torch.Tensor:
+             log_var: torch.Tensor,
+             kl_weight: float = KL_WEIGHT) -> torch.Tensor:
     """
-    Total VAE loss = LogCosh reconstruction + KL divergence.
-    KL formula from the paper: -0.5 * mean(log_var - mu^2 - exp(log_var) + 1)
+    Total VAE loss = LogCosh reconstruction + β * KL divergence.
+    KL formula: -0.5 * mean(log_var - mu² - exp(log_var) + 1)
+
+    kl_weight (β): scales the KL term relative to reconstruction.
+    With raw GISTIC2 inputs (range {-2,...,2}) and sigmoid decoder,
+    reconstruction gradient per latent dim is ~5e-4.  Using β=1 causes
+    posterior collapse (31/32 dims collapse to the N(0,I) prior).
+    β=0.001 keeps reconstruction-dominant so all 32 dims encode signal.
     """
     recon = log_cosh_loss(recon_x, x)
     kl    = -0.5 * torch.mean(log_var - mu.pow(2) - log_var.exp() + 1)
-    return recon + kl
+    return recon + kl_weight * kl
 
 
 def run_epoch(model: VAE_CNV,
               loader: DataLoader,
               optimizer: Lookahead,
               scheduler: torch.optim.lr_scheduler._LRScheduler,
-              device: torch.device) -> float:
+              device: torch.device,
+              kl_weight: float = KL_WEIGHT) -> float:
     """One training epoch. Returns mean loss over all batches."""
     model.train()
     total_loss = 0.0
@@ -183,7 +218,7 @@ def run_epoch(model: VAE_CNV,
         batch_x = batch_x.to(device)
         optimizer.zero_grad()
         recon_x, mu, log_var = model(batch_x)
-        loss = vae_loss(recon_x, batch_x, mu, log_var)
+        loss = vae_loss(recon_x, batch_x, mu, log_var, kl_weight=kl_weight)
         loss.backward()
         optimizer.step()
         # Per-step LR decay (approximates TF's step-based ExponentialDecay)
@@ -216,16 +251,35 @@ def main(args):
 
     print(f"Data  : {X.shape[0]} patients × {X.shape[1]} features")
 
-    # ── Normalise to [0, 1] for sigmoid decoder ───────────────────────────────
-    # GISTIC2 values are integers in {{-2,-1,0,1,2}} → map to {{0,0.25,0.5,0.75,1}}
-    X_norm = (X - X.min()) / (X.max() - X.min() + 1e-8)
+    # ── Do NOT normalise inputs ───────────────────────────────────────────────
+    # The reference code (Arya et al. 2023) feeds raw GISTIC2 integers
+    # {-2,-1,0,1,2} directly to the VAE with a sigmoid decoder.  This is
+    # intentional: because sigmoid output ∈ (0,1) can never reconstruct the
+    # raw targets, the reconstruction loss stays large (~0.36 mean log-cosh),
+    # preventing the KL term from collapsing the encoder to a trivial
+    # "output-0.5-for-everything" solution.
+    #
+    # When we normalise {-2,...,2} → {0,0.25,0.5,0.75,1.0} the dominant GISTIC2
+    # value 0 maps to 0.5, which the sigmoid decoder reproduces trivially, causing
+    # the VAE to collapse (loss locks at ~0.023 after epoch 1) and the latent
+    # features lose all discriminative information.
+    #
+    # Reference check: `vae.fit(X, X, ...)` in cnv_pca_vae_logcosh_feature_extractor.py
+    # uses the raw array — no min-max scaling or any other transform applied.
+    X_input = X.astype(np.float32)   # raw integers, no scaling
 
     # ── Device ────────────────────────────────────────────────────────────────
-    device = torch.device('cpu')
-    print(f"Device: {device}  (GPU support can be added via --device cuda)")
+    if args.device == 'auto':
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    else:
+        device = torch.device(args.device)
+    print(f"Device: {device}")
+    if device.type == 'cuda':
+        print(f"        {torch.cuda.get_device_name(device)}  "
+              f"({torch.cuda.get_device_properties(device).total_memory // 1024**2} MB)")
 
     # ── DataLoader ────────────────────────────────────────────────────────────
-    dataset = TensorDataset(torch.FloatTensor(X_norm))
+    dataset = TensorDataset(torch.FloatTensor(X_input))
     loader  = DataLoader(dataset, batch_size=args.batch_size, shuffle=True,
                          drop_last=False)
 
@@ -247,8 +301,11 @@ def main(args):
     # ── Training loop ─────────────────────────────────────────────────────────
     print(f"\nTraining for up to {args.epochs} epochs "
           f"(early stop if avg loss < {LOSS_THRESHOLD}) ...")
+    print(f"  KL weight β={args.kl_weight}  "
+          f"({'reference β=1' if args.kl_weight==1.0 else 'β-VAE: reconstruction-dominant'})")
     for epoch in range(1, args.epochs + 1):
-        avg_loss = run_epoch(model, loader, optimizer, scheduler, device)
+        avg_loss = run_epoch(model, loader, optimizer, scheduler, device,
+                             kl_weight=args.kl_weight)
         current_lr = scheduler.get_last_lr()[0]
         print(f"  Epoch {epoch:3d}/{args.epochs} | loss={avg_loss:.6f} | "
               f"lr={current_lr:.2e}")
@@ -260,7 +317,7 @@ def main(args):
     print("\nExtracting latent features ...")
     model.eval()
     with torch.no_grad():
-        X_tensor = torch.FloatTensor(X_norm).to(device)
+        X_tensor = torch.FloatTensor(X_input).to(device)
         mu, _ = model.encode(X_tensor)
         latent_np = mu.cpu().numpy()
 
@@ -307,6 +364,14 @@ if __name__ == '__main__':
                         help='Initial Adam learning rate')
     parser.add_argument('--latent_dim', type=int, default=LATENT_DIM,
                         help='VAE latent space dimension (32 per paper)')
+    parser.add_argument('--kl_weight', type=float, default=KL_WEIGHT,
+                        help='β coefficient for the KL divergence term. '
+                             'Default 0.001 prevents posterior collapse with '
+                             'raw GISTIC2 inputs. Set to 1.0 for reference β=1.')
+    parser.add_argument('--device', type=str, default='auto',
+                        choices=['auto', 'cpu', 'cuda'],
+                        help='Device to train on. "auto" selects cuda if '
+                             'available, otherwise cpu.')
     parser.add_argument('--test_mode', action='store_true',
                         help='Use 100 patients and 5 epochs for a quick CPU smoke-test')
     args = parser.parse_args()

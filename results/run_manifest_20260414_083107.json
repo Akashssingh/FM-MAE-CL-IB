@@ -1,0 +1,22 @@
+{
+  "run_id": "20260414_083107",
+  "timestamp": "2026-04-14T08:31:07.606008",
+  "modality_paths": [
+    "data/processed/vae_features_cnv.csv"
+  ],
+  "modality_names": [
+    "cnv"
+  ],
+  "modality_tag": "cnv",
+  "n_patients": 1078,
+  "n_features": 32,
+  "n_short_term": 827,
+  "n_long_term": 251,
+  "n_folds": 10,
+  "random_state": 123,
+  "test_mode": false,
+  "results_file": "results/classification_results.csv",
+  "dataset_snapshot": "results/dataset_used_20260414_083107.csv",
+  "splits_file": "results/cv_splits_20260414_083107.pkl",
+  "models_dir": "results/models"
+}
