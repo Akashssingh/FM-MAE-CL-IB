@@ -1,0 +1,2 @@
+repr_path,accuracy_mean,accuracy_std,f1_mean,f1_std,sensitivity_mean,sensitivity_std,precision_mean,precision_std,roc_auc_mean,roc_auc_std,mask_tag
+MAE/outputs/mask15/mae_representations.csv,0.5231481481481481,0.046757828128661034,0.640437025690495,0.046345811842584704,0.5573905377607993,0.06070142888878313,0.7573630105586837,0.03450385637248518,0.48504917606636677,0.067088147192093,mask15
