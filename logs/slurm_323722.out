@@ -1,0 +1,248 @@
+==============================================
+Job ID      : 323722
+Node        : GPU2.cse.usf.edu
+GPU(s)      : NVIDIA A100 80GB PCIe, 81920 MiB
+Start time  : Tue Apr 14 08:20:18 EDT 2026
+Working dir : /home/a/akashsingh/FM-MAE-CL-IB
+Python      : /home/a/akashsingh/.conda/envs/emogi-env/bin/python
+==============================================
+
+[STEP 1] Preprocessing CNV data with OS survival labels
+----------------------------------------------
+[1/5] Loading CNV data from:
+      data/TCGA.BRCA.sampleMap_Gistic2_CopyNumber_Gistic2_all_thresholded.by_genes
+      Raw shape (genes x patients): (24776, 1080)
+[2/5] Transposing to (patients x genes) ...
+      Shape after transpose: (1080, 24776)
+[3/5] Handling missing values ...
+      Dropped 0 features with >10% missing values
+[4/5] Removing zero-variance features ...
+      Removed 0 zero-variance features; 24776 remain.
+[5/5] Selecting top 500 features by variance ...
+      Top 500 features explain 3.5% of total variance
+[6/6] Loading OS survival data from survival_BRCA_survival.txt ...
+      Matched 1078/1080 patients
+      Short-term/label=1 (OS.time < 5yr): 827  [majority class]
+      Long-term /label=0 (OS.time >= 5yr): 251  [minority class, upsampled during training]
+      Missing OS.time: 2
+
+Done. Saved to: data/processed/raw_features_cnv.csv
+  Patients : 1080
+  Features : 500  (excluding patient ID and label columns)
+  Label distribution: {1: 827, 0: 251, -1: 2}
+
+[STEP 1] Done — Tue Apr 14 08:20:24 EDT 2026
+
+[STEP 2] Training VAE and extracting latent features (GPU)
+----------------------------------------------
+Loading data from: data/processed/raw_features_cnv.csv
+Data  : 1080 patients × 500 features
+Device: cuda
+        NVIDIA A100 80GB PCIe  (81092 MB)
+Model : 345,524 trainable parameters  |  latent_dim=32
+
+Training for up to 50 epochs (early stop if avg loss < 0.01) ...
+  Epoch   1/50 | loss=0.350696 | lr=1.00e-03
+  Epoch   2/50 | loss=0.309397 | lr=1.00e-03
+  Epoch   3/50 | loss=0.303365 | lr=1.00e-03
+  Epoch   4/50 | loss=0.299258 | lr=1.00e-03
+  Epoch   5/50 | loss=0.289588 | lr=1.00e-03
+  Epoch   6/50 | loss=0.283051 | lr=1.00e-03
+  Epoch   7/50 | loss=0.286040 | lr=1.00e-03
+  Epoch   8/50 | loss=0.280849 | lr=1.00e-03
+  Epoch   9/50 | loss=0.284649 | lr=1.00e-03
+  Epoch  10/50 | loss=0.279422 | lr=1.00e-03
+  Epoch  11/50 | loss=0.282478 | lr=1.00e-03
+  Epoch  12/50 | loss=0.279734 | lr=1.00e-03
+  Epoch  13/50 | loss=0.284305 | lr=1.00e-03
+  Epoch  14/50 | loss=0.279045 | lr=1.00e-03
+  Epoch  15/50 | loss=0.278687 | lr=1.00e-03
+  Epoch  16/50 | loss=0.276872 | lr=1.00e-03
+  Epoch  17/50 | loss=0.279049 | lr=1.00e-03
+  Epoch  18/50 | loss=0.277931 | lr=1.00e-03
+  Epoch  19/50 | loss=0.275140 | lr=1.00e-03
+  Epoch  20/50 | loss=0.277242 | lr=1.00e-03
+  Epoch  21/50 | loss=0.277329 | lr=1.00e-03
+  Epoch  22/50 | loss=0.274650 | lr=1.00e-03
+  Epoch  23/50 | loss=0.276730 | lr=1.00e-03
+  Epoch  24/50 | loss=0.273175 | lr=1.00e-03
+  Epoch  25/50 | loss=0.274431 | lr=1.00e-03
+  Epoch  26/50 | loss=0.271766 | lr=1.00e-03
+  Epoch  27/50 | loss=0.271888 | lr=1.00e-03
+  Epoch  28/50 | loss=0.268399 | lr=1.00e-03
+  Epoch  29/50 | loss=0.271009 | lr=1.00e-03
+  Epoch  30/50 | loss=0.269364 | lr=1.00e-03
+  Epoch  31/50 | loss=0.270231 | lr=1.00e-03
+  Epoch  32/50 | loss=0.267936 | lr=1.00e-03
+  Epoch  33/50 | loss=0.269306 | lr=1.00e-03
+  Epoch  34/50 | loss=0.266670 | lr=1.00e-03
+  Epoch  35/50 | loss=0.268814 | lr=1.00e-03
+  Epoch  36/50 | loss=0.269778 | lr=1.00e-03
+  Epoch  37/50 | loss=0.267404 | lr=9.99e-04
+  Epoch  38/50 | loss=0.267927 | lr=9.99e-04
+  Epoch  39/50 | loss=0.267597 | lr=9.99e-04
+  Epoch  40/50 | loss=0.266766 | lr=9.99e-04
+  Epoch  41/50 | loss=0.267298 | lr=9.99e-04
+  Epoch  42/50 | loss=0.268365 | lr=9.99e-04
+  Epoch  43/50 | loss=0.270150 | lr=9.99e-04
+  Epoch  44/50 | loss=0.267267 | lr=9.99e-04
+  Epoch  45/50 | loss=0.267302 | lr=9.99e-04
+  Epoch  46/50 | loss=0.267742 | lr=9.99e-04
+  Epoch  47/50 | loss=0.267057 | lr=9.99e-04
+  Epoch  48/50 | loss=0.267374 | lr=9.99e-04
+  Epoch  49/50 | loss=0.266854 | lr=9.99e-04
+  Epoch  50/50 | loss=0.268634 | lr=9.99e-04
+
+Extracting latent features ...
+Latent feature shape: (1080, 32)
+VAE features saved to: data/processed/vae_features_cnv.csv
+Model checkpoint  : data/processed/vae_features_cnv_model.pt
+
+[STEP 2] Done — Tue Apr 14 08:20:35 EDT 2026
+
+[STEP 3] Training classifiers with 10-fold stratified CV
+----------------------------------------------
+
+Loading 1 modality file(s) ...
+  cnv: data/processed/vae_features_cnv.csv
+
+Dataset : 1078 patients | 32 features
+  Short-term survivors (label=1) : 827
+  Long-term survivors  (label=0) : 251
+  Class imbalance ratio : 3.29
+  Dataset snapshot → results/dataset_used_20260414_082036.csv
+  CV splits (10 folds) → results/cv_splits_20260414_082036.pkl
+  Run manifest → results/run_manifest_20260414_082036.json
+
+Running 5 classifiers with 10-fold stratified CV ...
+
+
+============================================================
+  Classifier : rbf_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.5694 | TN=22 FP=4 FN=58 TP=24
+    Fold  2/10 | ROC-AUC=0.5586 | TN=21 FP=4 FN=60 TP=23
+    Fold  3/10 | ROC-AUC=0.5508 | TN=17 FP=8 FN=48 TP=35
+    Fold  4/10 | ROC-AUC=0.5528 | TN=18 FP=7 FN=51 TP=32
+    Fold  5/10 | ROC-AUC=0.4607 | TN=14 FP=11 FN=53 TP=30
+    Fold  6/10 | ROC-AUC=0.5829 | TN=18 FP=7 FN=46 TP=37
+    Fold  7/10 | ROC-AUC=0.5067 | TN=16 FP=9 FN=52 TP=31
+    Fold  8/10 | ROC-AUC=0.4366 | TN=14 FP=11 FN=57 TP=26
+    Fold  9/10 | ROC-AUC=0.5039 | TN=13 FP=12 FN=42 TP=40
+    Fold 10/10 | ROC-AUC=0.4898 | TN=19 FP=6 FN=64 TP=18
+    OOF predictions → results/models/rbf_svm_oof_predictions.csv
+
+  ── cnv | rbf_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.5212
+    CV  Accuracy  : 0.4341
+    CV  Precision : 0.7893
+    CV  Sensitivity: 0.3579
+    CV  F1-score  : 0.4925
+    Full ROC-AUC  : 0.5325
+
+============================================================
+  Classifier : linear_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.6295 | TN=21 FP=5 FN=45 TP=37
+    Fold  2/10 | ROC-AUC=0.5588 | TN=18 FP=7 FN=50 TP=33
+    Fold  3/10 | ROC-AUC=0.5508 | TN=17 FP=8 FN=48 TP=35
+    Fold  4/10 | ROC-AUC=0.5528 | TN=18 FP=7 FN=51 TP=32
+    Fold  5/10 | ROC-AUC=0.4607 | TN=14 FP=11 FN=53 TP=30
+    Fold  6/10 | ROC-AUC=0.5889 | TN=18 FP=7 FN=45 TP=38
+    Fold  7/10 | ROC-AUC=0.4807 | TN=15 FP=10 FN=53 TP=30
+    Fold  8/10 | ROC-AUC=0.4366 | TN=14 FP=11 FN=57 TP=26
+    Fold  9/10 | ROC-AUC=0.5039 | TN=13 FP=12 FN=42 TP=40
+    Fold 10/10 | ROC-AUC=0.5141 | TN=19 FP=6 FN=60 TP=22
+    OOF predictions → results/models/linear_svm_oof_predictions.csv
+
+  ── cnv | linear_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.5277
+    CV  Accuracy  : 0.4545
+    CV  Precision : 0.7936
+    CV  Sensitivity: 0.3906
+    CV  F1-score  : 0.5235
+    Full ROC-AUC  : 0.5306
+
+============================================================
+  Classifier : poly_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.5643 | TN=23 FP=3 FN=62 TP=20
+    Fold  2/10 | ROC-AUC=0.5345 | TN=21 FP=4 FN=64 TP=19
+    Fold  3/10 | ROC-AUC=0.5407 | TN=18 FP=7 FN=53 TP=30
+    Fold  4/10 | ROC-AUC=0.5306 | TN=19 FP=6 FN=58 TP=25
+    Fold  5/10 | ROC-AUC=0.4627 | TN=15 FP=10 FN=56 TP=27
+    Fold  6/10 | ROC-AUC=0.5646 | TN=21 FP=4 FN=59 TP=24
+    Fold  7/10 | ROC-AUC=0.4827 | TN=16 FP=9 FN=56 TP=27
+    Fold  8/10 | ROC-AUC=0.4145 | TN=15 FP=10 FN=64 TP=19
+    Fold  9/10 | ROC-AUC=0.4941 | TN=18 FP=7 FN=60 TP=22
+    Fold 10/10 | ROC-AUC=0.5088 | TN=23 FP=2 FN=74 TP=8
+    OOF predictions → results/models/poly_svm_oof_predictions.csv
+
+  ── cnv | poly_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.5097
+    CV  Accuracy  : 0.3803
+    CV  Precision : 0.7809
+    CV  Sensitivity: 0.2672
+    CV  F1-score  : 0.3982
+    Full ROC-AUC  : 0.5374
+
+============================================================
+  Classifier : sigmoid_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.4634 | TN=13 FP=13 FN=47 TP=35
+    Fold  2/10 | ROC-AUC=0.4610 | TN=11 FP=14 FN=43 TP=40
+    Fold  3/10 | ROC-AUC=0.4128 | TN=11 FP=14 FN=51 TP=32
+    Fold  4/10 | ROC-AUC=0.4508 | TN=12 FP=13 FN=48 TP=35
+    Fold  5/10 | ROC-AUC=0.4689 | TN=12 FP=13 FN=45 TP=38
+    Fold  6/10 | ROC-AUC=0.5289 | TN=15 FP=10 FN=45 TP=38
+    Fold  7/10 | ROC-AUC=0.4872 | TN=9 FP=16 FN=32 TP=51
+    Fold  8/10 | ROC-AUC=0.4590 | TN=10 FP=15 FN=40 TP=43
+    Fold  9/10 | ROC-AUC=0.4483 | TN=9 FP=16 FN=38 TP=44
+    Fold 10/10 | ROC-AUC=0.4700 | TN=11 FP=14 FN=41 TP=41
+    OOF predictions → results/models/sigmoid_svm_oof_predictions.csv
+
+  ── cnv | sigmoid_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.4650
+    CV  Accuracy  : 0.4731
+    CV  Precision : 0.7421
+    CV  Sensitivity: 0.4800
+    CV  F1-score  : 0.5830
+    Full ROC-AUC  : 0.4812
+
+============================================================
+  Classifier : random_forest
+============================================================
+    Fold  1/10 | ROC-AUC=0.5117 | TN=6 FP=20 FN=17 TP=65
+    Fold  2/10 | ROC-AUC=0.4214 | TN=3 FP=22 FN=23 TP=60
+    Fold  3/10 | ROC-AUC=0.4475 | TN=4 FP=21 FN=22 TP=61
+    Fold  4/10 | ROC-AUC=0.4935 | TN=6 FP=19 FN=21 TP=62
+    Fold  5/10 | ROC-AUC=0.4434 | TN=5 FP=20 FN=26 TP=57
+    Fold  6/10 | ROC-AUC=0.5116 | TN=6 FP=19 FN=18 TP=65
+    Fold  7/10 | ROC-AUC=0.5154 | TN=8 FP=17 FN=24 TP=59
+    Fold  8/10 | ROC-AUC=0.5195 | TN=7 FP=18 FN=20 TP=63
+    Fold  9/10 | ROC-AUC=0.4859 | TN=6 FP=19 FN=22 TP=60
+    Fold 10/10 | ROC-AUC=0.4815 | TN=7 FP=18 FN=26 TP=56
+    OOF predictions → results/models/random_forest_oof_predictions.csv
+
+  ── cnv | random_forest ──────────────────────────────
+    CV  ROC-AUC   : 0.4831
+    CV  Accuracy  : 0.6178
+    CV  Precision : 0.7591
+    CV  Sensitivity: 0.7352
+    CV  F1-score  : 0.7469
+    Full ROC-AUC  : 0.8701
+
+============================================================
+All results saved to   : results/classification_results.csv
+Per-fold metrics       : results/per_fold_metrics.csv
+Best models            : results/models/
+OOF predictions        : results/models/<clf>_oof_predictions.csv
+CV splits              : results/cv_splits_20260414_082036.pkl
+Run manifest           : results/run_manifest_20260414_082036.json
+
+[STEP 3] Done — Tue Apr 14 08:20:43 EDT 2026
+
+==============================================
+Pipeline complete — Tue Apr 14 08:20:43 EDT 2026
+Results : /home/a/akashsingh/FM-MAE-CL-IB/results/
+==============================================
