@@ -1,0 +1,43 @@
+==============================================
+Job ID      : 323941
+Node        : GPU3.cse.usf.edu
+GPU(s)      : NVIDIA GeForce GTX 1080 Ti, 11264 MiB
+Start time  : Tue Apr 14 16:09:23 EDT 2026
+Working dir : /home/a/akashsingh/FM-MAE-CL-IB
+Python      : /home/a/akashsingh/.conda/envs/emogi-env/bin/python
+==============================================
+
+[MAE] Pretraining — mask_ratio=0.15, epochs=10
+----------------------------------------------
+Loading dataset from data/processed/raw_features_cnv.csv ...
+  1080 patients  |  500 genes
+
+================================================================
+  Mask ratio : 15%  (75 / 500 genes masked per sample)
+  Device     : cuda  |  Params: 702,469
+  Epochs     : 10  |  Batch: 64
+  encoder    : d_model=128  heads=4  layers=4
+  decoder    : d_model=64  heads=2  layers=2
+  Train/Val  : 972 / 108 patients
+  Output     : MAE/outputs/mask15
+================================================================
+  Epoch    1/10  train_loss=1.0132  train_acc=0.625  val_loss=0.7974  val_acc=0.692
+  Epoch   10/10  train_loss=0.6077  train_acc=0.759  val_loss=0.5458  val_acc=0.788
+  Best val loss : 0.5458  checkpoint : MAE/outputs/mask15/best_model.pt
+  Representations : MAE/outputs/mask15/mae_representations.csv  shape=(1080, 128)
+
+Summary written to MAE/outputs/summary_20260414_160927.json
+
+[MAE] Linear probe evaluation
+----------------------------------------------
+────────────────────────────────────────────────────────────────
+  mask15  |  MAE/outputs/mask15/mae_representations.csv
+  Patients : 1078  |  label=1 (short-term): 827  |  label=0 (long-term): 251
+[mask15] F1=0.659 ± 0.039  Acc=0.548 ± 0.037  Sens=0.572 ± 0.055  Prec=0.781 ± 0.024  AUC=0.508 ± 0.054
+
+Probe results written to MAE/outputs/probe_results_20260414_161002.csv
+
+==============================================
+End time : Tue Apr 14 16:10:02 EDT 2026
+All done.
+==============================================

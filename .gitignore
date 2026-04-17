@@ -52,3 +52,27 @@ elbow_plot.png
 *.sav
 model.sav
 uni_modal_results.csv
+
+# ── Saved model binaries (pickle / sklearn artifacts) ─────────────────────────
+*.pkl
+results/cv_splits_*.pkl
+
+# ── Run-specific manifest & dataset snapshots ─────────────────────────────────
+results/run_manifest_*.json
+results/ref_manifest_*.json
+results/dataset_used_*.csv
+results/per_fold_metrics.csv
+results/cv_splits_*.pkl
+
+# ── AI agent instruction & config files ───────────────────────────────────────
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.cursorrules
+.windsurfrules
+.mcp.json
+.opencode.json
+
+# ── Code-review-graph MCP outputs ─────────────────────────────────────────────
+.code-review-graph/

@@ -1,0 +1,156 @@
+==============================================
+Job ID      : 324207
+Node        : GPU3.cse.usf.edu
+GPU(s)      : NVIDIA GeForce GTX 1080 Ti, 11264 MiB
+Start time  : Wed Apr 15 11:46:56 EDT 2026
+Working dir : /home/a/akashsingh/FM-MAE-CL-IB
+Python      : /home/a/akashsingh/.conda/envs/emogi-env/bin/python
+==============================================
+
+[CLASSIFIER] Reference VAE features — reference_files/vae_features_cnv.csv
+  1079 patients | 32 VAE dims | label_cnv (0/1)
+  Classifiers: RBF SVM, Linear SVM, Poly SVM, Sigmoid SVM, Random Forest
+  Protocol: 10-fold stratified CV + per-fold minority upsampling
+----------------------------------------------
+
+Loading 1 modality file(s) ...
+  cnv: reference_files/vae_features_cnv.csv
+
+Dataset : 1079 patients | 32 features
+  Short-term survivors (label=1) : 828
+  Long-term survivors  (label=0) : 251
+  Class imbalance ratio : 3.30
+  Dataset snapshot → results/dataset_used_20260415_114702.csv
+  CV splits (10 folds) → results/cv_splits_20260415_114702.pkl
+  Run manifest → results/run_manifest_20260415_114702.json
+
+Running 5 classifiers with 10-fold stratified CV ...
+
+
+============================================================
+  Classifier : rbf_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.4470 | TN=2 FP=24 FN=15 TP=67
+    Fold  2/10 | ROC-AUC=0.4696 | TN=3 FP=22 FN=15 TP=68
+    Fold  3/10 | ROC-AUC=0.5718 | TN=6 FP=19 FN=8 TP=75
+    Fold  4/10 | ROC-AUC=0.5455 | TN=8 FP=17 FN=19 TP=64
+    Fold  5/10 | ROC-AUC=0.5198 | TN=4 FP=21 FN=10 TP=73
+    Fold  6/10 | ROC-AUC=0.4896 | TN=4 FP=21 FN=15 TP=68
+    Fold  7/10 | ROC-AUC=0.4998 | TN=3 FP=22 FN=10 TP=73
+    Fold  8/10 | ROC-AUC=0.5198 | TN=4 FP=21 FN=10 TP=73
+    Fold  9/10 | ROC-AUC=0.5518 | TN=5 FP=20 FN=8 TP=75
+    Fold 10/10 | ROC-AUC=0.5163 | TN=6 FP=19 FN=17 TP=65
+    OOF predictions → results/models/rbf_svm_oof_predictions.csv
+
+  ── cnv | rbf_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.5131
+    CV  Accuracy  : 0.6914
+    CV  Precision : 0.7729
+    CV  Sensitivity: 0.8466
+    CV  F1-score  : 0.8081
+    Full ROC-AUC  : 0.8927
+
+============================================================
+  Classifier : linear_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.4808 | TN=12 FP=14 FN=41 TP=41
+    Fold  2/10 | ROC-AUC=0.5552 | TN=13 FP=12 FN=34 TP=49
+    Fold  3/10 | ROC-AUC=0.5133 | TN=10 FP=15 FN=31 TP=52
+    Fold  4/10 | ROC-AUC=0.5311 | TN=13 FP=12 FN=38 TP=45
+    Fold  5/10 | ROC-AUC=0.5352 | TN=12 FP=13 FN=34 TP=49
+    Fold  6/10 | ROC-AUC=0.5234 | TN=9 FP=16 FN=26 TP=57
+    Fold  7/10 | ROC-AUC=0.4730 | TN=11 FP=14 FN=41 TP=42
+    Fold  8/10 | ROC-AUC=0.4530 | TN=10 FP=15 FN=41 TP=42
+    Fold  9/10 | ROC-AUC=0.4431 | TN=8 FP=17 FN=36 TP=47
+    Fold 10/10 | ROC-AUC=0.4534 | TN=12 FP=13 FN=47 TP=35
+    OOF predictions → results/models/linear_svm_oof_predictions.csv
+
+  ── cnv | linear_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.4961
+    CV  Accuracy  : 0.5273
+    CV  Precision : 0.7650
+    CV  Sensitivity: 0.5543
+    CV  F1-score  : 0.6429
+    Full ROC-AUC  : 0.5709
+
+============================================================
+  Classifier : poly_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.4390 | TN=0 FP=26 FN=10 TP=72
+    Fold  2/10 | ROC-AUC=0.5019 | TN=1 FP=24 FN=3 TP=80
+    Fold  3/10 | ROC-AUC=0.4718 | TN=1 FP=24 FN=8 TP=75
+    Fold  4/10 | ROC-AUC=0.5178 | TN=3 FP=22 FN=7 TP=76
+    Fold  5/10 | ROC-AUC=0.5340 | TN=2 FP=23 FN=1 TP=82
+    Fold  6/10 | ROC-AUC=0.5039 | TN=2 FP=23 FN=6 TP=77
+    Fold  7/10 | ROC-AUC=0.5178 | TN=3 FP=22 FN=7 TP=76
+    Fold  8/10 | ROC-AUC=0.4518 | TN=0 FP=25 FN=8 TP=75
+    Fold  9/10 | ROC-AUC=0.6019 | TN=6 FP=19 FN=3 TP=80
+    Fold 10/10 | ROC-AUC=0.5373 | TN=4 FP=21 FN=7 TP=75
+    OOF predictions → results/models/poly_svm_oof_predictions.csv
+
+  ── cnv | poly_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.5077
+    CV  Accuracy  : 0.7322
+    CV  Precision : 0.7703
+    CV  Sensitivity: 0.9275
+    CV  F1-score  : 0.8416
+    Full ROC-AUC  : 0.9145
+
+============================================================
+  Classifier : sigmoid_svm
+============================================================
+    Fold  1/10 | ROC-AUC=0.4634 | TN=13 FP=13 FN=47 TP=35
+    Fold  2/10 | ROC-AUC=0.5530 | TN=15 FP=10 FN=41 TP=42
+    Fold  3/10 | ROC-AUC=0.4689 | TN=12 FP=13 FN=45 TP=38
+    Fold  4/10 | ROC-AUC=0.4728 | TN=14 FP=11 FN=51 TP=32
+    Fold  5/10 | ROC-AUC=0.5330 | TN=14 FP=11 FN=41 TP=42
+    Fold  6/10 | ROC-AUC=0.4773 | TN=7 FP=18 FN=27 TP=56
+    Fold  7/10 | ROC-AUC=0.4308 | TN=11 FP=14 FN=48 TP=35
+    Fold  8/10 | ROC-AUC=0.5149 | TN=14 FP=11 FN=44 TP=39
+    Fold  9/10 | ROC-AUC=0.3851 | TN=6 FP=19 FN=39 TP=44
+    Fold 10/10 | ROC-AUC=0.5168 | TN=17 FP=8 FN=53 TP=29
+    OOF predictions → results/models/sigmoid_svm_oof_predictions.csv
+
+  ── cnv | sigmoid_svm ──────────────────────────────
+    CV  ROC-AUC   : 0.4816
+    CV  Accuracy  : 0.4773
+    CV  Precision : 0.7538
+    CV  Sensitivity: 0.4734
+    CV  F1-score  : 0.5816
+    Full ROC-AUC  : 0.4122
+
+============================================================
+  Classifier : random_forest
+============================================================
+    Fold  1/10 | ROC-AUC=0.4428 | TN=4 FP=22 FN=22 TP=60
+    Fold  2/10 | ROC-AUC=0.5096 | TN=5 FP=20 FN=15 TP=68
+    Fold  3/10 | ROC-AUC=0.5496 | TN=7 FP=18 FN=15 TP=68
+    Fold  4/10 | ROC-AUC=0.5417 | TN=6 FP=19 FN=13 TP=70
+    Fold  5/10 | ROC-AUC=0.4335 | TN=3 FP=22 FN=21 TP=62
+    Fold  6/10 | ROC-AUC=0.4496 | TN=2 FP=23 FN=15 TP=68
+    Fold  7/10 | ROC-AUC=0.4858 | TN=2 FP=23 FN=9 TP=74
+    Fold  8/10 | ROC-AUC=0.5436 | TN=7 FP=18 FN=16 TP=67
+    Fold  9/10 | ROC-AUC=0.4436 | TN=2 FP=23 FN=16 TP=67
+    Fold 10/10 | ROC-AUC=0.4859 | TN=6 FP=19 FN=22 TP=60
+    OOF predictions → results/models/random_forest_oof_predictions.csv
+
+  ── cnv | random_forest ──────────────────────────────
+    CV  ROC-AUC   : 0.4886
+    CV  Accuracy  : 0.6562
+    CV  Precision : 0.7623
+    CV  Sensitivity: 0.8019
+    CV  F1-score  : 0.7816
+    Full ROC-AUC  : 0.9441
+
+============================================================
+All results saved to   : results/classification_results_ref_vae.csv
+Per-fold metrics       : results/per_fold_metrics.csv
+Best models            : results/models/
+OOF predictions        : results/models/<clf>_oof_predictions.csv
+CV splits              : results/cv_splits_20260415_114702.pkl
+Run manifest           : results/run_manifest_20260415_114702.json
+
+==============================================
+End time : Wed Apr 15 11:47:13 EDT 2026
+All done.
+==============================================
