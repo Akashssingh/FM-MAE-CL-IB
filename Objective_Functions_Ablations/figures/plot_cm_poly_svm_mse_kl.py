@@ -59,8 +59,8 @@ MET_CMAP = LinearSegmentedColormap.from_list(
      (1.00, "#0D2358")],
 )
 
-MET_COLS    = ["accuracy", "precision", "recall", "roc_auc", "auprc"]
-MET_HDRS    = ["Accuracy", "Precision", "Recall", "AUROC", "AUPRC"]
+MET_COLS    = ["accuracy", "precision", "recall", "f1", "roc_auc", "auprc"]
+MET_HDRS    = ["Accuracy", "Precision", "Recall", "F1", "AUROC", "AUPRC"]
 CLASS_NAMES = ["Long-term", "Short-term"]
 FONT        = 12          # universal label/text font size
 FONT_KW     = "bold"      # universal font weight
@@ -86,7 +86,7 @@ def _draw_fold_row(fig, gs_row, fold_num, tn, fp, fn, tp,
     """
     inner = gridspec.GridSpecFromSubplotSpec(
         1, 3, subplot_spec=gs_row,
-        width_ratios=[0.75, 2.0, 3.8],
+        width_ratios=[0.75, 2.0, 4.6],
         wspace=0.45,
     )
 
@@ -217,7 +217,7 @@ def main():
 
     # ── figure layout ─────────────────────────────────────────────────────
     ROW_H = 1.55
-    FIG_W = 13.0
+    FIG_W = 15.0
     FIG_H = ROW_H * n_folds + 0.50   # extra headroom for top metric headers
 
     fig = plt.figure(figsize=(FIG_W, FIG_H), dpi=300)
