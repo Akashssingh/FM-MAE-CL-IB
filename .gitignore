@@ -49,6 +49,8 @@ Thumbs.db
 *.log
 *.png
 elbow_plot.png
+# Keep generated figures in Objective_Functions_Ablations/figures/
+!Objective_Functions_Ablations/figures/**/*.png
 *.sav
 model.sav
 uni_modal_results.csv
