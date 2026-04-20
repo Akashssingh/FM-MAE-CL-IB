@@ -286,6 +286,18 @@ def prepare_cnv_data(cnv_path: str,
     result   = pd.concat(
         [id_df, X_selected.reset_index(drop=True), label_df], axis=1)
 
+    # Drop label=-1 patients only when survival data was provided and at least
+    # some patients received valid labels — avoids dropping everyone when the
+    # script is run without --survival_path.
+    has_survival = (survival_path and os.path.exists(survival_path)) or \
+                   (clinical_path and os.path.exists(clinical_path))
+    if has_survival and result['label_cnv'].isin([0, 1]).any():
+        n_before = len(result)
+        result = result[result['label_cnv'].isin([0, 1])].reset_index(drop=True)
+        n_dropped = n_before - len(result)
+        if n_dropped:
+            print(f"      Dropped {n_dropped} patient(s) with unknown survival (label=-1)")
+
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     result.to_csv(output_path, index=False)
 
@@ -313,7 +325,7 @@ def main():
         help='Path to raw GISTIC2-thresholded CNV TSV (genes x patients).')
     parser.add_argument(
         '--output_path', type=str,
-        default=os.path.join('data', 'processed', 'raw_features_cnv.csv'),
+        default=os.path.join('data', 'processed', 'raw_features_cnv_ablation.csv'),
         help='Output path for the processed raw_features CSV.')
     parser.add_argument(
         '--survival_path', type=str, default=None,

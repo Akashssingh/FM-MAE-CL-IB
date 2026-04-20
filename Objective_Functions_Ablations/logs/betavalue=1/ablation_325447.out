@@ -1,0 +1,230 @@
+==============================================
+Job ID      : 325447
+Node        : GPU3.cse.usf.edu
+GPU(s)      : NVIDIA GeForce GTX 1080 Ti, 11264 MiB
+Start time  : Mon Apr 20 17:01:47 EDT 2026
+Working dir : /home/a/akashsingh/FM-MAE-CL-IB
+==============================================
+
+[ABLATION CONFIG]
+  run_name   : logcosh_kl
+  loss_fn    : logcosh
+  regularizer: kl
+  kl_weight  : 1.0
+  mmd_weight : 10.0
+  epochs     : 50
+----------------------------------------------
+
+[1/2] Generating / verifying persistent CV splits ...
+Splits file already exists: /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/splits/splits_10fold.json
+Use --overwrite to regenerate.
+
+[2/2] Running ablation ...
+Splits: 10 folds | 1078 patients
+
+Loading: /home/a/akashsingh/FM-MAE-CL-IB/data/processed/raw_features_cnv_ablation.csv
+  1078 patients × 500 raw features
+  Label 0 (long-term): 251  Label 1 (short-term): 827
+Device: cuda
+        NVIDIA GeForce GTX 1080 Ti
+
+============================================================
+  Training VAE | recon=logcosh | reg=kl
+============================================================
+  VAE: input=500 → latent=32 | 345,524 params | recon=logcosh | reg=kl
+       KL weight β=1.0
+  Epoch   1/50 | total=0.41610  recon=0.36365  reg=0.05246 | lr=1.00e-03
+  Epoch   2/50 | total=0.36277  recon=0.34373  reg=0.01904 | lr=1.00e-03
+  Epoch   3/50 | total=0.32176  recon=0.29480  reg=0.02696 | lr=1.00e-03
+  Epoch   4/50 | total=0.31531  recon=0.28948  reg=0.02583 | lr=1.00e-03
+  Epoch   5/50 | total=0.30487  recon=0.27979  reg=0.02508 | lr=1.00e-03
+  Epoch   6/50 | total=0.29501  recon=0.27031  reg=0.02470 | lr=1.00e-03
+  Epoch   7/50 | total=0.29016  recon=0.26683  reg=0.02333 | lr=1.00e-03
+  Epoch   8/50 | total=0.28755  recon=0.26428  reg=0.02327 | lr=1.00e-03
+  Epoch   9/50 | total=0.28835  recon=0.26374  reg=0.02461 | lr=1.00e-03
+  Epoch  10/50 | total=0.28887  recon=0.26501  reg=0.02386 | lr=1.00e-03
+  Epoch  11/50 | total=0.28940  recon=0.26541  reg=0.02399 | lr=1.00e-03
+  Epoch  12/50 | total=0.28842  recon=0.26554  reg=0.02288 | lr=1.00e-03
+  Epoch  13/50 | total=0.28766  recon=0.26351  reg=0.02414 | lr=1.00e-03
+  Epoch  14/50 | total=0.28609  recon=0.26242  reg=0.02368 | lr=1.00e-03
+  Epoch  15/50 | total=0.28848  recon=0.26557  reg=0.02290 | lr=1.00e-03
+  Epoch  16/50 | total=0.28444  recon=0.26204  reg=0.02240 | lr=1.00e-03
+  Epoch  17/50 | total=0.28746  recon=0.26384  reg=0.02362 | lr=1.00e-03
+  Epoch  18/50 | total=0.28415  recon=0.26205  reg=0.02210 | lr=1.00e-03
+  Epoch  19/50 | total=0.28681  recon=0.26371  reg=0.02311 | lr=1.00e-03
+  Epoch  20/50 | total=0.28386  recon=0.26186  reg=0.02200 | lr=1.00e-03
+  Epoch  21/50 | total=0.28202  recon=0.26037  reg=0.02165 | lr=1.00e-03
+  Epoch  22/50 | total=0.28254  recon=0.26013  reg=0.02241 | lr=1.00e-03
+  Epoch  23/50 | total=0.28533  recon=0.26153  reg=0.02380 | lr=1.00e-03
+  Epoch  24/50 | total=0.28415  recon=0.26179  reg=0.02237 | lr=1.00e-03
+  Epoch  25/50 | total=0.28433  recon=0.26050  reg=0.02382 | lr=1.00e-03
+  Epoch  26/50 | total=0.28156  recon=0.26000  reg=0.02156 | lr=1.00e-03
+  Epoch  27/50 | total=0.28802  recon=0.26389  reg=0.02413 | lr=1.00e-03
+  Epoch  28/50 | total=0.28502  recon=0.26221  reg=0.02281 | lr=1.00e-03
+  Epoch  29/50 | total=0.28214  recon=0.25915  reg=0.02299 | lr=1.00e-03
+  Epoch  30/50 | total=0.28122  recon=0.25803  reg=0.02319 | lr=1.00e-03
+  Epoch  31/50 | total=0.28386  recon=0.26152  reg=0.02235 | lr=1.00e-03
+  Epoch  32/50 | total=0.28417  recon=0.26066  reg=0.02351 | lr=1.00e-03
+  Epoch  33/50 | total=0.28001  recon=0.25649  reg=0.02351 | lr=1.00e-03
+  Epoch  34/50 | total=0.28148  recon=0.25873  reg=0.02275 | lr=1.00e-03
+  Epoch  35/50 | total=0.27817  recon=0.25684  reg=0.02133 | lr=1.00e-03
+  Epoch  36/50 | total=0.28098  recon=0.25742  reg=0.02356 | lr=1.00e-03
+  Epoch  37/50 | total=0.27837  recon=0.25554  reg=0.02284 | lr=9.99e-04
+  Epoch  38/50 | total=0.28056  recon=0.25814  reg=0.02242 | lr=9.99e-04
+  Epoch  39/50 | total=0.27471  recon=0.25120  reg=0.02351 | lr=9.99e-04
+  Epoch  40/50 | total=0.27570  recon=0.25334  reg=0.02236 | lr=9.99e-04
+  Epoch  41/50 | total=0.27668  recon=0.25380  reg=0.02288 | lr=9.99e-04
+  Epoch  42/50 | total=0.27161  recon=0.24918  reg=0.02244 | lr=9.99e-04
+  Epoch  43/50 | total=0.27563  recon=0.25326  reg=0.02237 | lr=9.99e-04
+  Epoch  44/50 | total=0.27454  recon=0.25071  reg=0.02383 | lr=9.99e-04
+  Epoch  45/50 | total=0.27459  recon=0.24998  reg=0.02461 | lr=9.99e-04
+  Epoch  46/50 | total=0.27142  recon=0.24876  reg=0.02266 | lr=9.99e-04
+  Epoch  47/50 | total=0.27083  recon=0.24861  reg=0.02221 | lr=9.99e-04
+  Epoch  48/50 | total=0.27321  recon=0.25012  reg=0.02309 | lr=9.99e-04
+  Epoch  49/50 | total=0.27175  recon=0.24791  reg=0.02383 | lr=9.99e-04
+  Epoch  50/50 | total=0.27089  recon=0.24658  reg=0.02431 | lr=9.99e-04
+  Latent features: (1078, 32)  (epochs run: 50)
+  Checkpoint       → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_kl_20260420_170155/vae_checkpoint.pt
+  Training log     → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_kl_20260420_170155/vae_training_log.csv
+
+Latent features → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_kl_20260420_170155/vae_latent_features.csv
+Manifest        → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_kl_20260420_170155/manifest.json
+
+============================================================
+  5 classifiers | 10-fold pre-fixed splits
+============================================================
+
+────────────────────────────────────────────────────────────
+  Classifier: rbf_svm
+────────────────────────────────────────────────────────────
+    Fold  1/10 | ROC=0.5706  AUPRC=0.8189  Acc=0.7222  F1=0.8276 | TN=6 FP=20 FN=10 TP=72
+    Fold  2/10 | ROC=0.4588  AUPRC=0.7688  Acc=0.6574  F1=0.7886 | TN=2 FP=23 FN=14 TP=69
+    Fold  3/10 | ROC=0.4872  AUPRC=0.8086  Acc=0.6759  F1=0.7977 | TN=4 FP=21 FN=14 TP=69
+    Fold  4/10 | ROC=0.4395  AUPRC=0.7626  Acc=0.6481  F1=0.7816 | TN=2 FP=23 FN=15 TP=68
+    Fold  5/10 | ROC=0.4848  AUPRC=0.7651  Acc=0.6852  F1=0.8000 | TN=6 FP=19 FN=15 TP=68
+    Fold  6/10 | ROC=0.5369  AUPRC=0.7858  Acc=0.6852  F1=0.8023 | TN=5 FP=20 FN=14 TP=69
+    Fold  7/10 | ROC=0.5730  AUPRC=0.8106  Acc=0.7500  F1=0.8457 | TN=7 FP=18 FN=9 TP=74
+    Fold  8/10 | ROC=0.4405  AUPRC=0.7566  Acc=0.6759  F1=0.7977 | TN=4 FP=21 FN=14 TP=69
+    Fold  9/10 | ROC=0.5693  AUPRC=0.8328  Acc=0.7103  F1=0.8208 | TN=5 FP=20 FN=11 TP=71
+    Fold 10/10 | ROC=0.5083  AUPRC=0.7645  Acc=0.6822  F1=0.7976 | TN=6 FP=19 FN=15 TP=67
+
+  ── rbf_svm ────────────────────────────────────────
+    CV  AUROC     : 0.5069
+    CV  AUPRC     : 0.7874
+    CV  Accuracy  : 0.6893
+    CV  Precision : 0.7734
+    CV  Recall    : 0.8416
+    CV  F1        : 0.8060
+    Full AUROC    : 0.9556
+    Full AUPRC    : 0.9759
+
+────────────────────────────────────────────────────────────
+  Classifier: linear_svm
+────────────────────────────────────────────────────────────
+    Fold  1/10 | ROC=0.4728  AUPRC=0.7328  Acc=0.5278  F1=0.6331 | TN=13 FP=13 FN=38 TP=44
+    Fold  2/10 | ROC=0.4535  AUPRC=0.7382  Acc=0.5000  F1=0.6301 | TN=8 FP=17 FN=37 TP=46
+    Fold  3/10 | ROC=0.4740  AUPRC=0.7676  Acc=0.5278  F1=0.6483 | TN=10 FP=15 FN=36 TP=47
+    Fold  4/10 | ROC=0.4096  AUPRC=0.6990  Acc=0.5278  F1=0.6531 | TN=9 FP=16 FN=35 TP=48
+    Fold  5/10 | ROC=0.4911  AUPRC=0.7469  Acc=0.4907  F1=0.6043 | TN=11 FP=14 FN=41 TP=42
+    Fold  6/10 | ROC=0.5335  AUPRC=0.7766  Acc=0.5741  F1=0.6761 | TN=14 FP=11 FN=35 TP=48
+    Fold  7/10 | ROC=0.5655  AUPRC=0.8177  Acc=0.5926  F1=0.7067 | TN=11 FP=14 FN=30 TP=53
+    Fold  8/10 | ROC=0.3660  AUPRC=0.7008  Acc=0.4074  F1=0.5224 | TN=9 FP=16 FN=48 TP=35
+    Fold  9/10 | ROC=0.4963  AUPRC=0.7593  Acc=0.5327  F1=0.6429 | TN=12 FP=13 FN=37 TP=45
+    Fold 10/10 | ROC=0.4180  AUPRC=0.7344  Acc=0.4860  F1=0.6043 | TN=10 FP=15 FN=40 TP=42
+
+  ── linear_svm ────────────────────────────────────────
+    CV  AUROC     : 0.4680
+    CV  AUPRC     : 0.7473
+    CV  Accuracy  : 0.5167
+    CV  Precision : 0.7564
+    CV  Recall    : 0.5441
+    CV  F1        : 0.6321
+    Full AUROC    : 0.5964
+    Full AUPRC    : 0.8127
+
+────────────────────────────────────────────────────────────
+  Classifier: poly_svm
+────────────────────────────────────────────────────────────
+    Fold  1/10 | ROC=0.4381  AUPRC=0.7264  Acc=0.6852  F1=0.8111 | TN=1 FP=25 FN=9 TP=73
+    Fold  2/10 | ROC=0.4092  AUPRC=0.7190  Acc=0.7222  F1=0.8370 | TN=1 FP=24 FN=6 TP=77
+    Fold  3/10 | ROC=0.5253  AUPRC=0.7913  Acc=0.7222  F1=0.8370 | TN=1 FP=24 FN=6 TP=77
+    Fold  4/10 | ROC=0.6434  AUPRC=0.8261  Acc=0.7593  F1=0.8556 | TN=5 FP=20 FN=6 TP=77
+    Fold  5/10 | ROC=0.5600  AUPRC=0.8015  Acc=0.7500  F1=0.8541 | TN=2 FP=23 FN=4 TP=79
+    Fold  6/10 | ROC=0.4742  AUPRC=0.7377  Acc=0.7500  F1=0.8556 | TN=1 FP=24 FN=3 TP=80
+    Fold  7/10 | ROC=0.6202  AUPRC=0.8604  Acc=0.7407  F1=0.8495 | TN=1 FP=24 FN=4 TP=79
+    Fold  8/10 | ROC=0.4660  AUPRC=0.7940  Acc=0.7130  F1=0.8324 | TN=0 FP=25 FN=6 TP=77
+    Fold  9/10 | ROC=0.5439  AUPRC=0.7963  Acc=0.7383  F1=0.8478 | TN=1 FP=24 FN=4 TP=78
+    Fold 10/10 | ROC=0.5780  AUPRC=0.7956  Acc=0.7383  F1=0.8427 | TN=4 FP=21 FN=7 TP=75
+
+  ── poly_svm ────────────────────────────────────────
+    CV  AUROC     : 0.5258
+    CV  AUPRC     : 0.7848
+    CV  Accuracy  : 0.7319
+    CV  Precision : 0.7675
+    CV  Recall    : 0.9334
+    CV  F1        : 0.8423
+    Full AUROC    : 0.9747
+    Full AUPRC    : 0.9804
+
+────────────────────────────────────────────────────────────
+  Classifier: sigmoid_svm
+────────────────────────────────────────────────────────────
+    Fold  1/10 | ROC=0.4887  AUPRC=0.7729  Acc=0.5000  F1=0.5781 | TN=17 FP=9 FN=45 TP=37
+    Fold  2/10 | ROC=0.5142  AUPRC=0.7884  Acc=0.4722  F1=0.5778 | TN=12 FP=13 FN=44 TP=39
+    Fold  3/10 | ROC=0.4634  AUPRC=0.7765  Acc=0.5556  F1=0.6522 | TN=15 FP=10 FN=38 TP=45
+    Fold  4/10 | ROC=0.5971  AUPRC=0.8028  Acc=0.4537  F1=0.5693 | TN=10 FP=15 FN=44 TP=39
+    Fold  5/10 | ROC=0.5077  AUPRC=0.7766  Acc=0.4630  F1=0.5606 | TN=13 FP=12 FN=46 TP=37
+    Fold  6/10 | ROC=0.4535  AUPRC=0.7592  Acc=0.5556  F1=0.6571 | TN=14 FP=11 FN=37 TP=46
+    Fold  7/10 | ROC=0.4188  AUPRC=0.7183  Acc=0.5278  F1=0.6165 | TN=16 FP=9 FN=42 TP=41
+    Fold  8/10 | ROC=0.6198  AUPRC=0.8356  Acc=0.3519  F1=0.4444 | TN=10 FP=15 FN=55 TP=28
+    Fold  9/10 | ROC=0.4805  AUPRC=0.7593  Acc=0.4860  F1=0.5802 | TN=14 FP=11 FN=44 TP=38
+    Fold 10/10 | ROC=0.5834  AUPRC=0.8401  Acc=0.4673  F1=0.5778 | TN=11 FP=14 FN=43 TP=39
+
+  ── sigmoid_svm ────────────────────────────────────────
+    CV  AUROC     : 0.5127
+    CV  AUPRC     : 0.7830
+    CV  Accuracy  : 0.4833
+    CV  Precision : 0.7639
+    CV  Recall    : 0.4703
+    CV  F1        : 0.5814
+    Full AUROC    : 0.6051
+    Full AUPRC    : 0.8145
+
+────────────────────────────────────────────────────────────
+  Classifier: random_forest
+────────────────────────────────────────────────────────────
+    Fold  1/10 | ROC=0.5497  AUPRC=0.7820  Acc=0.6852  F1=0.8023 | TN=5 FP=21 FN=13 TP=69
+    Fold  2/10 | ROC=0.5236  AUPRC=0.7912  Acc=0.6019  F1=0.7456 | TN=2 FP=23 FN=20 TP=63
+    Fold  3/10 | ROC=0.4829  AUPRC=0.7822  Acc=0.6759  F1=0.7977 | TN=4 FP=21 FN=14 TP=69
+    Fold  4/10 | ROC=0.4581  AUPRC=0.7412  Acc=0.6296  F1=0.7531 | TN=7 FP=18 FN=22 TP=61
+    Fold  5/10 | ROC=0.4718  AUPRC=0.7519  Acc=0.6389  F1=0.7607 | TN=7 FP=18 FN=21 TP=62
+    Fold  6/10 | ROC=0.4508  AUPRC=0.7425  Acc=0.6852  F1=0.8046 | TN=4 FP=21 FN=13 TP=70
+    Fold  7/10 | ROC=0.5824  AUPRC=0.8321  Acc=0.6759  F1=0.7977 | TN=4 FP=21 FN=14 TP=69
+    Fold  8/10 | ROC=0.5439  AUPRC=0.8108  Acc=0.6204  F1=0.7515 | TN=5 FP=20 FN=21 TP=62
+    Fold  9/10 | ROC=0.5405  AUPRC=0.7810  Acc=0.7009  F1=0.8072 | TN=8 FP=17 FN=15 TP=67
+    Fold 10/10 | ROC=0.5127  AUPRC=0.7834  Acc=0.6636  F1=0.7931 | TN=2 FP=23 FN=13 TP=69
+
+  ── random_forest ────────────────────────────────────────
+    CV  AUROC     : 0.5116
+    CV  AUPRC     : 0.7798
+    CV  Accuracy  : 0.6577
+    CV  Precision : 0.7653
+    CV  Recall    : 0.7994
+    CV  F1        : 0.7814
+    Full AUROC    : 0.9789
+    Full AUPRC    : 0.9892
+
+============================================================
+Run complete.
+  Aggregate results → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/results/ablation_results.csv
+  Per-fold metrics  → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/results/fold_metrics_logcosh_kl_20260420_170155.csv
+  Run outputs       → /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_kl_20260420_170155
+    (latent CSV, training log, checkpoint, ROC/PRC NPZs, CMs)
+============================================================
+
+==============================================
+End time : Mon Apr 20 17:02:41 EDT 2026
+Results  : /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/results/
+Outputs  : /home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/
+All done.
+==============================================

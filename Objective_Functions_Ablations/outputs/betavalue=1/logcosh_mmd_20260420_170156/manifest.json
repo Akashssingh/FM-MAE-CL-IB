@@ -1,0 +1,23 @@
+{
+  "run_id": "20260420_170156",
+  "run_name": "logcosh_mmd",
+  "run_tag": "logcosh_mmd_20260420_170156",
+  "loss_fn": "logcosh",
+  "regularizer": "mmd",
+  "kl_weight": 1.0,
+  "mmd_weight": 10.0,
+  "epochs": 50,
+  "latent_dim": 32,
+  "n_patients": 1078,
+  "n_raw_features": 500,
+  "n_label_0": 251,
+  "n_label_1": 827,
+  "device": "cuda",
+  "splits_file": "/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/splits/splits_10fold.json",
+  "input_path": "/home/a/akashsingh/FM-MAE-CL-IB/data/processed/raw_features_cnv_ablation.csv",
+  "results_csv": "/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/results/ablation_results.csv",
+  "fold_csv": "/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/results/fold_metrics_logcosh_mmd_20260420_170156.csv",
+  "latent_csv": "/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_mmd_20260420_170156/vae_latent_features.csv",
+  "outputs_dir": "/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/outputs/logcosh_mmd_20260420_170156",
+  "test_mode": false
+}
