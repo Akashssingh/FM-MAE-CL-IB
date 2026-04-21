@@ -1,12 +1,19 @@
 """
-Ablation Training Script — PyTorch VAE + ML Classifiers
-========================================================
-Full pipeline for objective-function ablation experiments:
-  1. Load raw CNV features  (data/processed/raw_features_cnv_ablation.csv)
-  2. Train our PyTorch VAE  (architecture = Arya et al. 2023)
-  3. Extract 32-dim latent features  (reparameterized z, matching author)
-  4. Run 5 ML classifiers using pre-generated persistent 10-fold splits
-  5. Record all metrics + save all data needed for figure regeneration
+Ablation Training Script — PyTorch VAE + ML Classifiers (mRNA modality)
+========================================================================
+Full pipeline for mRNA objective-function ablation experiments:
+  1. Load preprocessed mRNA features  (data/processed/raw_features_mrna.csv)
+  2. Min-Max scale features to [0,1]  (discretized -1/0/+1 → 0/0.5/1)
+  3. Train PyTorch VAE  (architecture = Arya et al. 2023)
+  4. Extract 32-dim latent features  (reparameterized z, matching author)
+  5. Run 5 ML classifiers using pre-generated persistent 10-fold splits
+  6. Record all metrics + save all data needed for figure regeneration
+
+Key difference vs CNV VAE:
+  The mRNA decoder output has NO sigmoid activation (reference script:
+  layers.Dense(original_dim) — no activation). This is because mRNA
+  features after discretization + MinMaxScaling are not strictly bounded
+  like CNV GISTIC2 scores.
 
 Ablation dimensions:
   Reconstruction loss : logcosh (reference) | mse | mae
@@ -26,19 +33,19 @@ Saved for figure regeneration (per run output dir):
   {clf}_confusion_matrices.npy  — per-fold 2×2 confusion matrices
 
 Usage:
-  # Generate splits once before first run:
-  python Objective_Functions_Ablations/generate_splits.py
+  # Generate splits once:
+  python Objective_Functions_Ablations/mRNA/generate_splits.py
 
   # logcosh + KL (reference objective):
-  python Objective_Functions_Ablations/run_ablation.py \\
+  python Objective_Functions_Ablations/mRNA/run_ablation.py \\
       --run_name logcosh_kl --loss_fn logcosh --regularizer kl
 
-  # MSE + MMD (WAE-MMD):
-  python Objective_Functions_Ablations/run_ablation.py \\
+  # MSE + MMD:
+  python Objective_Functions_Ablations/mRNA/run_ablation.py \\
       --run_name mse_mmd --loss_fn mse --regularizer mmd
 
   # Quick smoke-test:
-  python Objective_Functions_Ablations/run_ablation.py \\
+  python Objective_Functions_Ablations/mRNA/run_ablation.py \\
       --run_name smoke_test --test_mode
 """
 
@@ -58,6 +65,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.utils import resample
@@ -70,11 +78,11 @@ warnings.filterwarnings('ignore')
 
 # ── Directory layout ──────────────────────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 
 SPLITS_FILE = os.path.join(SCRIPT_DIR, 'splits', 'splits_10fold.json')
 RAW_DATA    = os.path.join(PROJECT_ROOT, 'data', 'processed',
-                            'raw_features_cnv_ablation.csv')
+                            'raw_features_mrna.csv')
 
 RESULTS_DIR = os.path.join(SCRIPT_DIR, 'results')
 LOGS_DIR    = os.path.join(SCRIPT_DIR, 'logs')
@@ -113,15 +121,17 @@ FOLD_HEADER = [
 
 # =============================================================================
 #  VAE architecture  (exact match to reference Keras VAE)
+#  IMPORTANT: decoder output has NO sigmoid — matches mrna_pca_vae_logcosh_
+#             feature_extractor.py where the last Dense has no activation.
 # =============================================================================
 
-class VAE_CNV(nn.Module):
+class VAE_mRNA(nn.Module):
     """
-    VAE for CNV data.  Architecture matches Arya et al. (2023):
+    VAE for mRNA data.  Architecture matches Arya et al. (2023):
       Encoder: input → Linear(256,Tanh) → Linear(128,Tanh) → Linear(64,Tanh)
                → [z_mean(32), z_log_var(32)]
       Decoder: z → Linear(64,Tanh) → Linear(128,Tanh) → Linear(256,Tanh)
-               → Linear(input_dim, Sigmoid)
+               → Linear(input_dim)  ← NO sigmoid (unlike CNV)
     Xavier uniform init (matches Keras Glorot default for Tanh).
     """
 
@@ -141,7 +151,7 @@ class VAE_CNV(nn.Module):
             nn.Linear(latent_dim, 64),  nn.Tanh(),
             nn.Linear(64, 128),         nn.Tanh(),
             nn.Linear(128, 256),        nn.Tanh(),
-            nn.Linear(256, input_dim),  nn.Sigmoid(),
+            nn.Linear(256, input_dim),  # NO sigmoid — mRNA decoder
         )
         self._init_weights()
 
@@ -166,7 +176,7 @@ class VAE_CNV(nn.Module):
     def forward(self, x):
         mu, log_var = self.encode(x)
         z = self.reparameterize(mu, log_var)
-        return self.decode(z), mu, log_var, z   # z returned for MMD
+        return self.decode(z), mu, log_var, z
 
 
 # =============================================================================
@@ -174,10 +184,7 @@ class VAE_CNV(nn.Module):
 # =============================================================================
 
 def log_cosh_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-    """
-    Numerically-stable log-cosh, matching tf.keras.losses.LogCosh().
-    log(cosh(x)) = |x| + log1p(exp(-2|x|)) - log(2)
-    """
+    """Numerically-stable log-cosh, matching tf.keras.losses.LogCosh()."""
     diff = (y_pred - y_true).clamp(-50, 50)
     return (diff.abs()
             + F.softplus(-2.0 * diff.abs())
@@ -200,39 +207,22 @@ LOSS_FNS = {'logcosh': log_cosh_loss, 'mse': mse_loss, 'mae': mae_loss}
 # =============================================================================
 
 def kl_divergence(mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
-    """Analytical KL(q(z|x) || N(0,I)) = -0.5 * mean(1 + log_var - mu² - exp(log_var))."""
     return -0.5 * torch.mean(log_var - mu.pow(2) - log_var.exp() + 1)
 
 
 def mmd_rbf(z: torch.Tensor, z_prior: torch.Tensor,
             bandwidth: float = None) -> torch.Tensor:
-    """
-    Unbiased RBF-kernel MMD² between encoder posterior samples z
-    and prior samples z_prior ~ N(0,I).
-
-    MMD²_u = E_zz[k(z,z')] + E_pp[k(p,p')] - 2·E_zp[k(z,p)]
-
-    Bandwidth defaults to latent_dim (a natural scale for N(0,I) in D dims,
-    since E[||z_i - z_j||²] = 2D for z_i,z_j ~ N(0,I)).
-
-    Uses the unbiased U-statistic (excludes diagonal) for the within-group terms.
-    Reference: Tolstikhin et al. (2018) "Wasserstein Auto-Encoders"
-    """
     if bandwidth is None:
-        bandwidth = float(z.shape[1])  # = latent_dim
-
+        bandwidth = float(z.shape[1])
     n = z.shape[0]
 
     def rbf(a, b):
-        # a: (N, D), b: (M, D)  →  kernel matrix: (N, M)
-        diff = a.unsqueeze(1) - b.unsqueeze(0)   # (N, M, D)
+        diff = a.unsqueeze(1) - b.unsqueeze(0)
         return torch.exp(-diff.pow(2).sum(-1) / (2.0 * bandwidth))
 
     kzz = rbf(z, z)
     kpp = rbf(z_prior, z_prior)
     kzp = rbf(z, z_prior)
-
-    # Unbiased: off-diagonal sum / n(n-1); cross term: full mean
     denom = max(float(n * (n - 1)), 1.0)
     mmd = ((kzz.sum() - kzz.trace()) / denom
            + (kpp.sum() - kpp.trace()) / denom
@@ -243,14 +233,10 @@ def mmd_rbf(z: torch.Tensor, z_prior: torch.Tensor,
 def vae_loss(recon_x, x, mu, log_var, z,
              recon_fn, regularizer: str,
              kl_weight: float, mmd_weight: float):
-    """
-    Total VAE loss = reconstruction + regularization.
-    Returns (total_loss_tensor, recon_scalar, reg_scalar) for logging.
-    """
     recon = recon_fn(recon_x, x)
     if regularizer == 'kl':
         reg = kl_weight * kl_divergence(mu, log_var)
-    else:  # mmd
+    else:
         z_prior = torch.randn_like(z)
         reg = mmd_weight * mmd_rbf(z, z_prior)
     total = recon + reg
@@ -262,8 +248,6 @@ def vae_loss(recon_x, x, mu, log_var, z,
 # =============================================================================
 
 class Lookahead:
-    """Lookahead (Zhang et al. 2019) wrapping any PyTorch optimizer."""
-
     def __init__(self, base_optimizer, k: int = 6, alpha: float = 0.5):
         self.base_optimizer = base_optimizer
         self.k = k
@@ -289,10 +273,10 @@ class Lookahead:
 
 
 # =============================================================================
-#  VAE training — saves training log CSV + model checkpoint
+#  VAE training
 # =============================================================================
 
-def train_vae(X_raw: np.ndarray,
+def train_vae(X_scaled: np.ndarray,
               loss_fn_name: str,
               regularizer: str,
               kl_weight: float,
@@ -301,22 +285,17 @@ def train_vae(X_raw: np.ndarray,
               device: torch.device,
               outputs_dir: str) -> np.ndarray:
     """
-    Train VAE on raw GISTIC2 features (unscaled integers).
-
-    Saved to outputs_dir:
-      vae_training_log.csv — epoch | total_loss | recon_loss | reg_loss | lr
-      vae_checkpoint.pt    — model state dict + full configuration
-
-    Returns: latent means z_mean (N × LATENT_DIM), deterministic, no sampling.
+    Train mRNA VAE on MinMax-scaled features.
+    Returns reparameterized z latent (N × LATENT_DIM).
     """
     recon_fn = LOSS_FNS[loss_fn_name]
-    X_tensor = torch.FloatTensor(X_raw)
+    X_tensor = torch.FloatTensor(X_scaled)
     loader   = DataLoader(TensorDataset(X_tensor),
                           batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
 
-    model = VAE_CNV(input_dim=X_raw.shape[1], latent_dim=LATENT_DIM).to(device)
+    model = VAE_mRNA(input_dim=X_scaled.shape[1], latent_dim=LATENT_DIM).to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"  VAE: input={X_raw.shape[1]} → latent={LATENT_DIM} "
+    print(f"  VAE_mRNA: input={X_scaled.shape[1]} → latent={LATENT_DIM} "
           f"| {n_params:,} params | recon={loss_fn_name} | reg={regularizer}")
     if regularizer == 'kl':
         print(f"       KL weight β={kl_weight}")
@@ -328,7 +307,6 @@ def train_vae(X_raw: np.ndarray,
     scheduler = torch.optim.lr_scheduler.ExponentialLR(adam_base, gamma=gamma)
     optimizer = Lookahead(adam_base)
 
-    # Initialise training log CSV
     log_path = os.path.join(outputs_dir, 'vae_training_log.csv')
     with open(log_path, 'w', newline='') as f:
         csv.writer(f).writerow(
@@ -365,27 +343,25 @@ def train_vae(X_raw: np.ndarray,
 
         with open(log_path, 'a', newline='') as f:
             csv.writer(f).writerow(
-                [epoch,
-                 round(avg_total, 6), round(avg_recon, 6),
-                 round(avg_reg, 6),   f'{lr:.4e}'])
+                [epoch, round(avg_total, 6), round(avg_recon, 6),
+                 round(avg_reg, 6), f'{lr:.4e}'])
 
         final_epoch = epoch
         if avg_total < LOSS_THRESHOLD:
             print(f"  Early stop: loss {avg_total:.6f} < {LOSS_THRESHOLD}")
             break
 
-    # Extract latent features using reparameterized z (matches author's encoder.predict(X))
+    # Reparameterized z (matches author's encoder.predict(X))
     model.eval()
     with torch.no_grad():
         mu_all, log_var_all = model.encode(X_tensor.to(device))
         latent = model.reparameterize(mu_all, log_var_all).cpu().numpy()
     print(f"  Latent features: {latent.shape}  (epochs run: {final_epoch})")
 
-    # Save full checkpoint for reproducibility
     ckpt_path = os.path.join(outputs_dir, 'vae_checkpoint.pt')
     torch.save({
         'model_state_dict': model.state_dict(),
-        'input_dim':    X_raw.shape[1],
+        'input_dim':    X_scaled.shape[1],
         'latent_dim':   LATENT_DIM,
         'loss_fn':      loss_fn_name,
         'regularizer':  regularizer,
@@ -393,20 +369,19 @@ def train_vae(X_raw: np.ndarray,
         'mmd_weight':   mmd_weight,
         'epochs_run':   final_epoch,
         'final_loss':   avg_total,
-        'n_patients':   X_raw.shape[0],
+        'n_patients':   X_scaled.shape[0],
     }, ckpt_path)
-    print(f"  Checkpoint       → {ckpt_path}")
-    print(f"  Training log     → {log_path}")
+    print(f"  Checkpoint   → {ckpt_path}")
+    print(f"  Training log → {log_path}")
 
     return latent
 
 
 # =============================================================================
-#  ML helpers  (mirrors reference ML_multimodal_train.py)
+#  ML helpers  (mirrors reference ML_multimodal_train.py exactly)
 # =============================================================================
 
 def upsample_minority(df: pd.DataFrame) -> pd.DataFrame:
-    """Per-fold minority oversampling — exact replica of reference upsample()."""
     label_col = df.columns[-1]
     counts    = df[label_col].value_counts()
     maj_cls   = counts.idxmax()
@@ -452,30 +427,13 @@ def _safe_metrics(y_true, y_pred, y_score):
 
 
 # =============================================================================
-#  CV loop — pre-fixed patient-ID splits; saves all figure data
+#  CV loop — pre-fixed patient-ID splits
 # =============================================================================
 
-def run_cv_with_splits(clf_name: str,
-                       model,
-                       latent_df: pd.DataFrame,
-                       splits: dict,
-                       run_name: str,
-                       loss_fn: str,
-                       regularizer: str,
-                       kl_weight: float,
-                       mmd_weight: float,
-                       fold_csv: str,
-                       oof_dir: str) -> dict:
-    """
-    10-fold CV using pre-generated persistent patient-ID splits.
-
-    Saves for figure generation:
-      {clf_name}_roc_curves.npz          — fpr/tpr/auc per fold
-      {clf_name}_prc_curves.npz          — precision/recall/ap per fold
-      {clf_name}_confusion_matrices.npy  — (n_folds, 2, 2) stack
-      {clf_name}_oof.csv                 — OOF predictions + probabilities
-      {clf_name}_best.pkl                — best sklearn model
-    """
+def run_cv_with_splits(clf_name, model, latent_df, splits,
+                       run_name, loss_fn, regularizer,
+                       kl_weight, mmd_weight,
+                       fold_csv, oof_dir):
     id_col    = latent_df.columns[0]
     label_col = latent_df.columns[-1]
     feat_cols = [c for c in latent_df.columns if c != id_col and c != label_col]
@@ -532,26 +490,24 @@ def run_cv_with_splits(clf_name: str,
         with open(fold_csv, 'a', newline='') as f:
             csv.writer(f).writerow([
                 run_name, loss_fn, regularizer, kl_weight, mmd_weight,
-                'cnv', clf_name, fold_idx,
+                'mrna', clf_name, fold_idx,
                 round(m['roc'], 4), round(m['prc'], 4),
                 round(m['acc'], 4), round(m['prec'], 4),
                 round(m['rec'], 4), round(m['f1'], 4),
                 m['tn'], m['fp'], m['fn'], m['tp'],
             ])
 
-        # ── Save per-fold curve data for figure generation ─────────────────
-        fpr, tpr, _     = roc_curve(y_test, y_score)
+        fpr, tpr, _      = roc_curve(y_test, y_score)
         prec_a, rec_a, _ = precision_recall_curve(y_test, y_score)
 
-        roc_save[f'fpr_fold{fold_idx}']  = fpr
-        roc_save[f'tpr_fold{fold_idx}']  = tpr
-        roc_save[f'auc_fold{fold_idx}']  = np.array([m['roc']])
+        roc_save[f'fpr_fold{fold_idx}']       = fpr
+        roc_save[f'tpr_fold{fold_idx}']       = tpr
+        roc_save[f'auc_fold{fold_idx}']       = np.array([m['roc']])
         prc_save[f'precision_fold{fold_idx}'] = prec_a
         prc_save[f'recall_fold{fold_idx}']    = rec_a
         prc_save[f'ap_fold{fold_idx}']        = np.array([m['prc']])
         cms.append(confusion_matrix(y_test, y_pred, labels=[0, 1]))
 
-        # OOF predictions
         for pid, yt, yp, ys in zip(test_ids, y_test, y_pred, y_score):
             oof_rows.append({
                 'patient_id': pid, 'fold': fold_idx,
@@ -559,27 +515,22 @@ def run_cv_with_splits(clf_name: str,
                 'prob_score': round(float(ys), 6),
             })
 
-        # Track best model by ROC-AUC (mirrors reference model_run())
         if m['roc'] > best_roc:
             best_roc = m['roc']
             pickle.dump(model, open(best_model_path, 'wb'))
         model = pickle.load(open(best_model_path, 'rb'))
 
-    # ── Persist curve data ────────────────────────────────────────────────────
     np.savez(os.path.join(oof_dir, f'{clf_name}_roc_curves.npz'), **roc_save)
     np.savez(os.path.join(oof_dir, f'{clf_name}_prc_curves.npz'), **prc_save)
     if cms:
         np.save(os.path.join(oof_dir, f'{clf_name}_confusion_matrices.npy'),
                 np.stack(cms))
-
     pd.DataFrame(oof_rows).to_csv(
         os.path.join(oof_dir, f'{clf_name}_oof.csv'), index=False)
 
-    # ── CV averages ───────────────────────────────────────────────────────────
     n_done = len(cms)
     avg    = {k: cum[k] / n_done for k in cum}
 
-    # ── Full-dataset evaluation with best model ────────────────────────────────
     X_all      = latent_df[feat_cols].values.astype(np.float32)
     y_all      = latent_df[label_col].values.astype(int)
     best_model = pickle.load(open(best_model_path, 'rb'))
@@ -621,7 +572,7 @@ def _init_csv(path, header):
 def append_result(path, run_name, loss_fn, regularizer,
                   kl_weight, mmd_weight, clf_name, m):
     row = [
-        run_name, loss_fn, regularizer, kl_weight, mmd_weight, 'cnv', clf_name,
+        run_name, loss_fn, regularizer, kl_weight, mmd_weight, 'mrna', clf_name,
         m['cv_roc_auc'], m['cv_auprc'], m['cv_accuracy'],
         m['cv_precision'], m['cv_recall'], m['cv_f1'],
         m['cv_tn'], m['cv_fp'], m['cv_fn'], m['cv_tp'],
@@ -652,28 +603,32 @@ def main(args):
     run_id  = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     run_tag = f"{args.run_name}_{run_id}"
 
-    run_outputs_dir = os.path.join(OUTPUTS_DIR, run_tag)
-    os.makedirs(run_outputs_dir, exist_ok=True)
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    os.makedirs(LOGS_DIR, exist_ok=True)
+    # Group all runs under betavalue= folder regardless of regularizer
+    subdir = f"betavalue={args.kl_weight}"
 
-    results_csv = os.path.join(RESULTS_DIR, 'ablation_results.csv')
-    fold_csv    = os.path.join(RESULTS_DIR, f'fold_metrics_{run_tag}.csv')
+    run_outputs_dir = os.path.join(OUTPUTS_DIR, subdir, run_tag)
+    results_subdir  = os.path.join(RESULTS_DIR, subdir)
+    logs_subdir     = os.path.join(LOGS_DIR,    subdir)
+
+    os.makedirs(run_outputs_dir, exist_ok=True)
+    os.makedirs(results_subdir,  exist_ok=True)
+    os.makedirs(logs_subdir,     exist_ok=True)
+
+    results_csv = os.path.join(results_subdir, 'ablation_results.csv')
+    fold_csv    = os.path.join(results_subdir, f'fold_metrics_{run_tag}.csv')
 
     _init_csv(results_csv, RESULTS_HEADER)
     _init_csv(fold_csv,    FOLD_HEADER)
 
-    # ── Verify splits ─────────────────────────────────────────────────────────
     if not os.path.exists(args.splits_file):
         print(f"ERROR: splits file not found: {args.splits_file}")
-        print("Run: python Objective_Functions_Ablations/generate_splits.py")
+        print("Run: python Objective_Functions_Ablations/mRNA/generate_splits.py")
         sys.exit(1)
 
     with open(args.splits_file) as f:
         splits = json.load(f)
     print(f"Splits: {splits['n_folds']} folds | {splits['n_patients']} patients")
 
-    # ── Load raw features ─────────────────────────────────────────────────────
     print(f"\nLoading: {args.input_path}")
     df = pd.read_csv(args.input_path, header=0, index_col=None, low_memory=False)
 
@@ -686,15 +641,18 @@ def main(args):
     class_labels = class_labels[valid_mask].astype(int)
     X_raw        = X_raw[valid_mask]
 
+    # MinMax scale: discretized -1/0/+1 → 0/0.5/1
+    scaler  = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X_raw).astype(np.float32)
+
     if args.test_mode:
         args.epochs = 3
-        print(f"[TEST MODE] {X_raw.shape[0]} patients, {args.epochs} epochs")
+        print(f"[TEST MODE] {X_scaled.shape[0]} patients, {args.epochs} epochs")
 
-    print(f"  {X_raw.shape[0]} patients × {X_raw.shape[1]} raw features")
+    print(f"  {X_scaled.shape[0]} patients × {X_scaled.shape[1]} features (MinMax-scaled)")
     print(f"  Label 0 (long-term): {(class_labels==0).sum()}  "
           f"Label 1 (short-term): {(class_labels==1).sum()}")
 
-    # ── Device ────────────────────────────────────────────────────────────────
     if args.device == 'auto':
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     else:
@@ -703,40 +661,38 @@ def main(args):
     if device.type == 'cuda':
         print(f"        {torch.cuda.get_device_name(device)}")
 
-    # ── Train VAE ─────────────────────────────────────────────────────────────
     print(f"\n{'='*60}")
-    print(f"  Training VAE | recon={args.loss_fn} | reg={args.regularizer}")
+    print(f"  Training VAE_mRNA | recon={args.loss_fn} | reg={args.regularizer}")
     print(f"{'='*60}")
 
     latent = train_vae(
-        X_raw, args.loss_fn, args.regularizer,
+        X_scaled, args.loss_fn, args.regularizer,
         args.kl_weight, args.mmd_weight,
         args.epochs, device, run_outputs_dir,
     )
 
-    # ── Build latent DataFrame ─────────────────────────────────────────────────
-    feat_names = [f'cnv_vae_{i}' for i in range(1, LATENT_DIM + 1)]
+    feat_names = [f'mrna_vae_{i}' for i in range(1, LATENT_DIM + 1)]
     latent_df  = pd.DataFrame(latent, columns=feat_names)
     latent_df.insert(0, 'submitter_id.samples', patient_ids)
-    latent_df['label_cnv'] = class_labels
+    latent_df['label_mrna'] = class_labels
 
     latent_csv = os.path.join(run_outputs_dir, 'vae_latent_features.csv')
     latent_df.to_csv(latent_csv, index=False)
     print(f"\nLatent features → {latent_csv}")
 
-    # ── Save run manifest ──────────────────────────────────────────────────────
     manifest = {
         'run_id':          run_id,
         'run_name':        args.run_name,
         'run_tag':         run_tag,
+        'modality':        'mrna',
         'loss_fn':         args.loss_fn,
         'regularizer':     args.regularizer,
         'kl_weight':       args.kl_weight,
         'mmd_weight':      args.mmd_weight,
         'epochs':          args.epochs,
         'latent_dim':      LATENT_DIM,
-        'n_patients':      int(X_raw.shape[0]),
-        'n_raw_features':  int(X_raw.shape[1]),
+        'n_patients':      int(X_scaled.shape[0]),
+        'n_raw_features':  int(X_scaled.shape[1]),
         'n_label_0':       int((class_labels == 0).sum()),
         'n_label_1':       int((class_labels == 1).sum()),
         'device':          str(device),
@@ -751,10 +707,9 @@ def main(args):
     manifest_path = os.path.join(run_outputs_dir, 'manifest.json')
     with open(manifest_path, 'w') as f:
         json.dump(manifest, f, indent=2)
-    print(f"Manifest        → {manifest_path}")
+    print(f"Manifest → {manifest_path}")
 
-    # ── Run classifiers ────────────────────────────────────────────────────────
-    n_est = 3 if args.test_mode else 10
+    n_est       = 3 if args.test_mode else 10
     classifiers = get_classifiers(n_estimators=n_est)
 
     print(f"\n{'='*60}")
@@ -780,42 +735,28 @@ def main(args):
     print(f"  Aggregate results → {results_csv}")
     print(f"  Per-fold metrics  → {fold_csv}")
     print(f"  Run outputs       → {run_outputs_dir}")
-    print(f"    (latent CSV, training log, checkpoint, ROC/PRC NPZs, CMs)")
     print(f"{'='*60}")
 
 
-# =============================================================================
-#  CLI
-# =============================================================================
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Ablation: train PyTorch VAE + run ML classifiers.',
+        description='mRNA ablation: train PyTorch VAE_mRNA + run ML classifiers.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--run_name', type=str, required=True,
-                        help='Short descriptive name (e.g. logcosh_kl, mse_mmd).')
-    parser.add_argument('--input_path', type=str, default=RAW_DATA,
-                        help='Raw CNV feature CSV (500 genes + label).')
-    parser.add_argument('--splits_file', type=str, default=SPLITS_FILE,
-                        help='Pre-generated persistent splits JSON.')
+    parser.add_argument('--run_name', type=str, required=True)
+    parser.add_argument('--input_path', type=str, default=RAW_DATA)
+    parser.add_argument('--splits_file', type=str, default=SPLITS_FILE)
     parser.add_argument('--loss_fn', type=str, default='logcosh',
-                        choices=list(LOSS_FNS.keys()),
-                        help='VAE reconstruction loss function.')
+                        choices=list(LOSS_FNS.keys()))
     parser.add_argument('--regularizer', type=str, default='kl',
-                        choices=['kl', 'mmd'],
-                        help='Latent space regularizer: KL divergence or MMD.')
-    parser.add_argument('--kl_weight', type=float, default=0.001,
-                        help='β for KL divergence term (used when --regularizer=kl). '
-                             'Default=1.0 matches the original Arya et al. implementation.')
+                        choices=['kl', 'mmd'])
+    parser.add_argument('--kl_weight', type=float, default=1.0,
+                        help='β for KL divergence.')
     parser.add_argument('--mmd_weight', type=float, default=10.0,
-                        help='λ for MMD term (used when --regularizer=mmd).')
-    parser.add_argument('--epochs', type=int, default=EPOCHS,
-                        help='Max VAE training epochs.')
+                        help='λ for MMD.')
+    parser.add_argument('--epochs', type=int, default=EPOCHS)
     parser.add_argument('--device', type=str, default='auto',
                         choices=['auto', 'cpu', 'cuda'])
-    parser.add_argument('--test_mode', action='store_true',
-                        help='3 epochs, 3-estimator RF for a quick smoke-test.')
+    parser.add_argument('--test_mode', action='store_true')
 
-    args = parser.parse_args()
-    main(args)
+    main(parser.parse_args())

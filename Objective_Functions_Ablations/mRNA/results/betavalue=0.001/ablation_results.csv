@@ -1,0 +1,1 @@
+run_name,loss_fn,regularizer,kl_weight,mmd_weight,modality,classifier,cv_roc_auc,cv_auprc,cv_accuracy,cv_precision,cv_recall,cv_f1,cv_tn,cv_fp,cv_fn,cv_tp,full_roc_auc,full_auprc,full_tn,full_fp,full_fn,full_tp

@@ -6,9 +6,9 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:1080Ti:1
 #SBATCH --mem=32G
-#SBATCH --time=02:00:00
-#SBATCH --output=Objective_Functions_Ablations/logs/ablation_%j.out
-#SBATCH --error=Objective_Functions_Ablations/logs/ablation_%j.err
+#SBATCH --time=04:00:00
+#SBATCH --output=/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/CNV/logs/ablation_%j.out
+#SBATCH --error=/home/a/akashsingh/FM-MAE-CL-IB/Objective_Functions_Ablations/CNV/logs/ablation_%j.err
 
 # ── Usage ──────────────────────────────────────────────────────────────────
 # Single run with defaults (logcosh + KL):
@@ -40,7 +40,7 @@ mkdir -p Objective_Functions_Ablations/logs \
 RUN_NAME="${RUN_NAME:-logcosh_kl}"
 LOSS_FN="${LOSS_FN:-logcosh}"
 REGULARIZER="${REGULARIZER:-kl}"
-KL_WEIGHT="${KL_WEIGHT:-0.001}"
+KL_WEIGHT="${KL_WEIGHT:-1.0}"
 MMD_WEIGHT="${MMD_WEIGHT:-10.0}"
 EPOCHS="${EPOCHS:-50}"
 

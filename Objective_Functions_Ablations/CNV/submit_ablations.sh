@@ -17,7 +17,7 @@ echo ""
 JOB1=$(RUN_NAME=logcosh_kl \
        LOSS_FN=logcosh \
        REGULARIZER=kl \
-       KL_WEIGHT=0.001 \
+       KL_WEIGHT=1.0 \
        sbatch --parsable "${SLURM_SCRIPT}")
 echo "  [1/4] logcosh + KL    → job ${JOB1}"
 
@@ -25,7 +25,7 @@ echo "  [1/4] logcosh + KL    → job ${JOB1}"
 JOB2=$(RUN_NAME=mse_kl \
        LOSS_FN=mse \
        REGULARIZER=kl \
-       KL_WEIGHT=0.001 \
+       KL_WEIGHT=1.0 \
        sbatch --parsable "${SLURM_SCRIPT}")
 echo "  [2/4] MSE (L2) + KL   → job ${JOB2}"
 
